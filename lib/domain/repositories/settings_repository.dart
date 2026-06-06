@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../models/runtime_state.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepository(ref.watch(apiClientProvider));
@@ -22,6 +23,14 @@ class SettingsRepository {
         if (departments is! List) return const <String>[];
         return departments.whereType<String>().toList(growable: false);
       },
+    );
+  }
+
+  Future<RuntimeState> getRuntimeState({CancelToken? cancelToken}) {
+    return _client.get(
+      '/api/settings/runtime-state',
+      cancelToken: cancelToken,
+      decode: RuntimeState.fromJson,
     );
   }
 }

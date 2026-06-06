@@ -1,60 +1,99 @@
-# YOURTJ选课社区 - Flutter 测试版
+<p align="center">
+  <img src="assets/images/app_logo.png" width="128" alt="YourTJ Course">
+</p>
 
-基于 Flutter 的 YourTJ 选课社区移动端测试应用。
+<h1 align="center">YourTJ Course</h1>
+<p align="center">
+  同济大学选课社区 · Flutter Android 测试客户端<br>
+  Flutter + Riverpod + lkcn_ui · YourTJ选课测试
+</p>
 
-当前应用名称为 `YourTJ选课测试`，默认连接真实后端 `https://jcourse.yourtj.de`。
-本仓库用于 Android 预发测试，APK 由 GitHub Actions 生成。
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#getting-started">Getting Started</a> •
+  <a href="#project-structure">Project Structure</a> •
+  <a href="#tech-stack">Tech Stack</a> •
+  <a href="#safety--compliance">Safety</a>
+</p>
 
-## 项目结构
+---
+
+**YourTJ Course Flutter** 是同济大学选课社区的 Android 预发测试客户端。
+它延续 iOS 版的信息结构与功能边界，同时保留 Flutter 端的移动端设计语言，
+直接调用 Cloudflare Workers 后端 API，当前重点覆盖查课、评课、选课和模拟排课。
+
+> iOS 仓库：[YourTJCourse-iOS](https://github.com/YourTongji/YourTJCourse-iOS)
+> 后端仓库：[YourTJCourse-Serverless](https://github.com/YourTongji/YourTJCourse-Serverless)
+
+## Features
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| **课程浏览** | 无限滚动列表、关键词搜索、只看有评价筛选、院系筛选、课程详情跳转 | 已接入 |
+| **课程详情** | 课程信息头、AI 课程总结、Markdown 评价列表、点赞/取消、隐藏/举报、关联课程 | 已接入 |
+| **评价系统** | 评价展示、ICU 多级标题规范化、举报与本机隐藏 | 部分接入 |
+| **排课模拟器** | 学期切换、年级/专业选择、课程检索、空段找课、冲突检测、移动端周课表 | 已接入 |
+| **公告通知** | 运行时拉取、未读弹窗、「我已知晓」标记已读、本机持久化 | 已接入 |
+| **更多设置** | 公告列表、社区规范、反馈说明、安全与合规、关于页 | 已接入 |
+| **积分钱包** | Credit 钱包、助记词、远程余额与积分 | 暂不跟进 |
+
+## Architecture
+
+Flutter 版采用轻量分层结构：UI 与交互在 `features`（功能）中，
+领域模型与仓库在 `domain`（领域层）中，网络、配置和本机存储在 `core`（基础层）中。
 
 ```text
-YourTJCourse-Flutter/
-├── android/                # Android 原生工程与启动图标
-├── assets/                 # 应用资源
-│   └── images/             # Logo 等图片资源
-├── lib/
-│   ├── core/               # 配置、网络、存储等基础能力
-│   ├── domain/             # 课程、评价、设置等领域模型与仓库
-│   ├── features/           # 页面功能
-│   │   ├── catalog/        # 查课
-│   │   ├── course_detail/  # 课程详情、评课与选课评价入口
-│   │   ├── scheduler/      # 培养方案查课与模拟排课
-│   │   └── settings/       # 设置
-│   └── shared/             # 复用 UI 状态组件
-├── test/                   # 单元测试与 Widget 测试
-└── .github/workflows/      # CI/CD
-    └── android-test.yml    # Android 测试 APK 预发包
+┌─────────────────────────────────────────┐
+│  App  (MaterialApp.router, Shell Tabs)  │
+├─────────────────────────────────────────┤
+│  Features                               │
+│  ┌────────┬──────────────┬────────────┐ │
+│  │Catalog │Course Detail │ Scheduler  │ │
+│  ├────────┼──────────────┼────────────┤ │
+│  │Settings│Announcements │            │ │
+│  └────────┴──────────────┴────────────┘ │
+├─────────────────────────────────────────┤
+│  Domain  (models, repositories)         │
+├─────────────────────────────────────────┤
+│  Core    (Dio, config, local storage)   │
+├─────────────────────────────────────────┤
+│  Shared  (widgets, markdown helpers)    │
+└─────────────────────────────────────────┘
 ```
 
-## 技术栈
+**Key design decisions:**
 
-| 层 | 技术 |
-|---|------|
-| 客户端 | Flutter, Dart |
-| 状态管理 | Riverpod |
-| 路由 | go_router |
-| 网络 | Dio |
-| UI 组件 | lkcn_ui Flutter 组件库 |
-| 存储 | shared_preferences, flutter_secure_storage |
-| CI/CD | GitHub Actions → Android Debug APK artifact |
+- **真实后端优先**：Release / CI 默认连接 `https://jcourse.yourtj.de`。
+- **Action 发包**：本地只做格式化、静态检查和测试，APK 由 GitHub Actions 生成。
+- **移动端优先**：排课界面采用分栏 / 标签页自适应，避免横向溢出。
+- **生命周期稳定**：Riverpod provider dispose 引起的请求取消不展示为业务错误。
+- **钱包隔离**：钱包涉及凭据与 Credit 服务，本测试版暂不纳入功能同步。
 
-## 快速开始
+## Getting Started
 
-### 环境要求
+### Prerequisites
 
 - Flutter 3.x
-- Dart SDK 随 Flutter 提供
 - Android SDK（仅本地调试时需要）
+- WSL / Linux 开发环境
 
-本项目默认在 WSL / Linux 环境开发。不要调用 Windows 挂载目录下的 Flutter SDK。
-
-### 安装依赖
+不要调用 Windows 挂载目录下的 Flutter SDK。当前推荐使用：
 
 ```bash
 /root/dev/flutter/bin/flutter --no-version-check pub get
 ```
 
-### 本地检查
+### API Configuration
+
+Flutter 版通过 `.env`（环境变量文件）读取 API 地址；CI 会自动生成该文件。
+
+| Environment | API Base | Credit Base |
+|-------------|----------|-------------|
+| **Default** | `https://jcourse.yourtj.de` | `https://core.credit.yourtj.de` |
+| **GitHub Actions** | `API_BASE_URL` secret 或默认真实后端 | `CREDIT_API_BASE_URL` secret 或默认 Credit 后端 |
+
+### Local Checks
 
 ```bash
 /root/dev/flutter/bin/dart format lib test
@@ -62,84 +101,84 @@ YourTJCourse-Flutter/
 /root/dev/flutter/bin/flutter --no-version-check test
 ```
 
-### Android 预发包
+### Android Pre-release
 
 本地不要求编译 APK。
 
-进入 GitHub Actions，运行 `Android Test APK`，在 Artifacts 下载
-`yourtjcourse-flutter-release-apks` 后按手机 CPU 架构安装对应 APK。
+PR 合入 `dev` 后，GitHub Actions 会运行 `Android Test APK` 并上传
+`yourtjcourse-flutter-release-apks`。按手机 CPU 架构安装对应 APK：
 
-## 开发流程
+- `app-arm64-v8a-release.apk`
+- `app-armeabi-v7a-release.apk`
+- `app-x86_64-release.apk`
+
+## Project Structure
 
 ```text
-feature/fix branch ──→ PR ──→ dev ───→ 生成预发测试 APK
-                           ↑              │
-                       PR Checks          │ 经测试后
-                      (analyze           ▼
-                       + test)     PR ──→ main
+YourTJCourse-Flutter/
+├── android/                       # Android 原生工程与启动图标
+├── assets/
+│   └── images/app_logo.png        # 与 iOS 同步的应用 logo
+├── lib/
+│   ├── core/                      # 配置、网络、存储等基础能力
+│   ├── domain/                    # 课程、评价、公告、AI 总结等模型与仓库
+│   ├── features/
+│   │   ├── announcements/         # 运行时公告弹窗
+│   │   ├── catalog/               # 查课与筛选
+│   │   ├── course_detail/         # 课程详情、AI 总结、评价操作
+│   │   ├── scheduler/             # 培养方案查课与模拟排课
+│   │   └── settings/              # 更多设置
+│   └── shared/                    # 复用 UI 状态组件与 Markdown 规则
+├── test/                          # 单元测试与 Widget 测试
+└── .github/workflows/
+    └── android-test.yml           # Android 预发包 Action
 ```
 
-### 日常开发
+## Tech Stack
 
-1. 从 `dev` 创建功能分支：`git checkout -b fix/xxx dev`
-2. 开发 → commit → push
-3. 开 Pull Request 到 `dev`
-4. Review 通过后 merge 到 `dev`
-5. 通过 `Android Test APK` 下载预发包，在真机上验证
+| Layer | Choice |
+|-------|--------|
+| Language | Dart |
+| UI | Flutter Material 3, lkcn_ui |
+| State | Riverpod 3 |
+| Routing | go_router |
+| Networking | Dio |
+| Local Storage | shared_preferences, flutter_secure_storage |
+| Markdown | flutter_markdown |
+| CI/CD | GitHub Actions |
 
-### 当前测试范围
+## Workflow
 
-- 查课：课程列表、筛选、课程详情
-- 评课：课程评价展示与提交相关入口
-- 选课：通过 PK 课程数据查看教学班信息
-- 模拟排课：按培养方案、搜索、时间段查课并加入模拟课表
+```text
+issue + label
+     │
+     ▼
+feature/fix branch
+     │
+     ▼
+PR → dev ──→ Android Test APK ──→ phone testing
+                                      │
+                                      ▼
+                              PR → main after approval
+```
 
-钱包功能暂不纳入本测试版跟进范围。
+### Commit Convention
 
-## 文档
+- `feat(scope): description`
+- `fix(scope): description`
+- `docs(scope): description`
+- `chore(scope): description`
 
-- 后端与接口规范以 `YourTJCourse-Serverless` 为准
-- 默认 API 地址：`https://jcourse.yourtj.de`
-- 排课接口沿用 Serverless PK API：
-  - `GET /api/getAllCalendar`
-  - `POST /api/findGradeByCalendarId`
-  - `POST /api/findMajorByGrade`
-  - `POST /api/findCourseByMajor`
-  - `POST /api/findOptionalCourseType`
-  - `POST /api/findCourseBySearch`
-  - `POST /api/findCourseByTime`
+常用 scope：`app`、`catalog`、`course`、`scheduler`、`settings`、`ci`、`docs`。
 
-## 贡献
+## Safety & Compliance
 
-1. Fork 本仓库
-2. 创建功能分支：`git checkout -b fix/your-fix-name`
-3. 提交更改：遵循 `Conventional Commits`（约定式提交）格式
-   - `fix(scope): description` — Bug 修复
-   - `feat(scope): description` — 新功能
-   - `docs(scope): description` — 文档更新
-   - `chore(scope): description` — 构建、CI 等杂项
-4. 推送并创建 Pull Request
+- **HTTPS 默认开启**：Release / CI 默认使用真实 HTTPS 后端。
+- **无硬编码凭据**：API 地址通过环境变量或默认公开地址配置，不提交 `.env`。
+- **UGC 合规**：评价提供举报与本机隐藏入口。
+- **请求生命周期处理**：页面切换导致的取消请求不作为业务错误展示。
+- **钱包暂不接入**：涉及凭据和 Credit 用户密钥的能力在本测试版中保持隔离。
 
-### Commit 规范
+## License
 
-- scope: `app`, `catalog`, `course`, `scheduler`, `settings`, `ci`, `docs`
-- 使用英文，祈使语气
-- 每个 commit 只做一件事
-
-### Issue 标签
-
-| 标签 | 含义 |
-|------|------|
-| `area:app` | Flutter 应用基础能力 |
-| `area:catalog` | 查课 |
-| `area:course` | 课程详情 / 评课 |
-| `area:scheduler` | 选课 / 模拟排课 |
-| `area:ci` | CI/CD 工作流 |
-| `severity:critical` | 数据丢失 / 安全漏洞 / 服务中断 |
-| `severity:high` | 功能不可用 / 严重影响用户体验 |
-| `severity:medium` | 体验降级 / 非关键功能异常 |
-| `severity:low` | 轻微 / 优化 / 未来改进 |
-
-## 许可
-
-本项目仅供学习和研究使用。
+© 2026 YourTJ. All rights reserved.
