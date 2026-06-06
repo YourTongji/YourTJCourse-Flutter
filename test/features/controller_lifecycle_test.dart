@@ -46,6 +46,10 @@ void main() {
     expect(first.selectedCalendarId, 202401);
     expect(second.selectedCalendarId, 202401);
     expect(second.grades, [2024]);
+    expect(second.selectedGrade, 2024);
+    expect(second.selectedMajorCode, '080901');
+    expect(second.majors.single.name, '计算机科学与技术');
+    expect(second.majorCourses.single.courseName, '数据结构');
   });
 }
 
@@ -108,6 +112,52 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     CancelToken? cancelToken,
   }) async {
     return const [2024];
+  }
+
+  @override
+  Future<List<MajorInfo>> findMajorByGrade({
+    required int calendarId,
+    required int grade,
+    CancelToken? cancelToken,
+  }) async {
+    return const [MajorInfo(code: '080901', name: '计算机科学与技术')];
+  }
+
+  @override
+  Future<List<SchedulerCourse>> findCourseByMajor({
+    required int calendarId,
+    required int grade,
+    required String code,
+    CancelToken? cancelToken,
+  }) async {
+    return const [
+      SchedulerCourse(
+        courseCode: 'COMP001',
+        courseName: '数据结构',
+        credit: 3,
+        faculty: '电子与信息工程学院',
+        courseNature: ['专业基础课'],
+        campus: ['嘉定'],
+        classes: [
+          SchedulerClass(
+            code: 'COMP001.01',
+            campus: '嘉定',
+            teachers: [TeacherInfo(teacherName: '李老师', teacherCode: 'T001')],
+            teachingLanguage: '中文',
+            arrangements: [
+              ArrangementInfo(
+                arrangementText: '周一 1-2 节',
+                occupyDay: 1,
+                occupyTime: [1, 2],
+                occupyWeek: [1, 2],
+                occupyRoom: 'J101',
+                teacherAndCode: '李老师 T001',
+              ),
+            ],
+          ),
+        ],
+      ),
+    ];
   }
 
   @override

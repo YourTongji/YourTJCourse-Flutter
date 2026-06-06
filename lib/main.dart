@@ -26,14 +26,25 @@ class YourTJCourseApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: LkcnColors.primary),
-        scaffoldBackgroundColor: LkcnColors.pageBg,
-      ),
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       routerConfig: _router,
     );
   }
+}
+
+ThemeData _buildTheme(Brightness brightness) {
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: LkcnColors.primary,
+    brightness: brightness,
+  );
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: colorScheme.surface,
+  );
 }
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();

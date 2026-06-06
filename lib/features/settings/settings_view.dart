@@ -83,8 +83,8 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('关于选课社区'),
-            subtitle: const Text('同步自 YourTJCourse-Serverless 关于页面'),
-            onTap: () => _showTextSheet(context, '关于选课社区', _aboutText),
+            subtitle: const Text('社区介绍、机制与致谢'),
+            onTap: () => _showAboutCommunity(context),
           ),
           ListTile(
             leading: const Icon(Icons.help_outline),
@@ -95,7 +95,7 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: const Text('隐私政策'),
-            subtitle: const Text('同步自 iOS 版隐私政策'),
+            subtitle: const Text('查看数据收集与安全说明'),
             onTap: () => _showTextSheet(context, '隐私政策', _privacyText),
           ),
           ListTile(
@@ -195,17 +195,122 @@ class SettingsView extends ConsumerWidget {
     );
   }
 
+  void _showAboutCommunity(BuildContext context) {
+    _showRichTextSheet(context, '关于选课社区', [
+      _SheetParagraph('简介', _aboutIntro),
+      _SheetParagraph('匿名身份', _aboutAnonymous),
+      _SheetParagraph('点评管理', _aboutModeration),
+      _SheetParagraph('联系方式', '您目前可以通过邮件 support@yourtj.de 联系我们。'),
+      _SheetParagraph('致谢', 'YOURTJ选课社区基于 SJTU选课社区 源代码。'),
+      _SheetLink(
+        'YOURTJ选课社区',
+        'https://github.com/WALKERKILLER/TongjiCourses-Serverless',
+      ),
+      _SheetLink('SJTU选课社区', 'https://github.com/SJTU-jCourse/jcourse'),
+      _SheetParagraph('', 'YOURTJ选课社区人机验证基于 BangCaptcha 源代码。'),
+      _SheetLink(
+        'YOURTJ选课社区人机验证',
+        'https://github.com/WALKERKILLER/TongjiCaptcha',
+      ),
+      _SheetLink('BangCaptcha', 'https://github.com/YuiNijika/BangCaptcha'),
+      _SheetParagraph('', '排课模拟器及高级检索基于 TONGJI-COURSE-SCHEDULER 源代码。'),
+      _SheetLink(
+        'TONGJI-COURSE-SCHEDULER',
+        'https://github.com/XiaLing233/tongji-course-scheduler',
+      ),
+    ]);
+  }
+
+  void _showRichTextSheet(
+    BuildContext context,
+    String title,
+    List<_SheetContent> content,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              for (final item in content) item.build(context, _openLink),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showAbout(BuildContext context) {
     showAboutDialog(
       context: context,
       applicationName: 'YourTJ Course',
-      applicationVersion: '1.0.0',
+      applicationVersion: '0.0.1',
       applicationIcon: Image.asset('assets/images/app_logo.png', width: 56),
-      children: const [
-        Text('同济大学选课社区 Flutter Android 测试客户端。'),
-        SizedBox(height: 8),
-        Text('默认连接真实后端 https://jcourse.yourtj.de。'),
-      ],
+      children: const [Text('同济大学选课社区 Flutter Android 测试客户端。')],
+    );
+  }
+}
+
+abstract class _SheetContent {
+  Widget build(
+    BuildContext context,
+    Future<void> Function(BuildContext, String) openLink,
+  );
+}
+
+class _SheetParagraph implements _SheetContent {
+  const _SheetParagraph(this.title, this.body);
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(
+    BuildContext context,
+    Future<void> Function(BuildContext, String) openLink,
+  ) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty) ...[
+            Text(title, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+          ],
+          Text(body),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetLink implements _SheetContent {
+  const _SheetLink(this.label, this.url);
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(
+    BuildContext context,
+    Future<void> Function(BuildContext, String) openLink,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => openLink(context, url),
+          icon: const Icon(Icons.open_in_new, size: 16),
+          label: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+        ),
+      ),
     );
   }
 }
@@ -227,26 +332,13 @@ YourTJ Course 是一个校园选课信息分享平台，为用户提供课程评
 本测试版不会收集不必要的个人信息，不会提交本机密钥或 .env 文件。
 ''';
 
-const _aboutText = '''
-简介
-YOURTJ选课社区为非官方网站，由同济大学在校生开发维护。选课社区目的在于让同学们了解课程的更多情况，延续“乌龙茶”选课社区精神，不想也不能代替教务处的课程评教。我们的愿景是：建立不记名、自由、简洁、高效的选课社区。
+const _aboutIntro =
+    'YOURTJ选课社区为非官方网站，由同济大学在校生开发维护。选课社区目的在于让同学们了解课程的更多情况，延续“乌龙茶”选课社区精神，不想也不能代替教务处的课程评教。我们的愿景是：建立不记名、自由、简洁、高效的选课社区。';
 
-匿名身份
-选课社区无需登录，不存储任何个人信息，您可以放心提交测评。
+const _aboutAnonymous = '选课社区无需登录，不存储任何个人信息，您可以放心提交测评。';
 
-点评管理
-在符合社区规范的情况下，我们不修改选课社区的点评内容，也不评价内容的真实性。如果您上过某一门课程并认为网站上的点评与事实不符，欢迎提交您的意见，我们相信全面的信息会给大家最好的答案。
-
-管理员的责任仅限于维护系统稳定、删除非课程点评内容和重复发帖，并维护课程和教师信息格式，方便进行数据的批量处理。
-
-联系方式
-您目前可以通过邮件 support@yourtj.de 联系我们。
-
-致谢
-YOURTJ选课社区基于 SJTU选课社区 源代码。
-YOURTJ选课社区人机验证基于 BangCaptcha 源代码。
-排课模拟器及高级检索基于 TONGJI-COURSE-SCHEDULER 源代码。
-''';
+const _aboutModeration =
+    '在符合社区规范的情况下，我们不修改选课社区的点评内容，也不评价内容的真实性。如果您上过某一门课程并认为网站上的点评与事实不符，欢迎提交您的意见，我们相信全面的信息会给大家最好的答案。管理员的责任仅限于维护系统稳定、删除非课程点评内容和重复发帖，并维护课程和教师信息格式，方便进行数据的批量处理。';
 
 const _faqText = '''
 我该点评哪些课程？写什么？
