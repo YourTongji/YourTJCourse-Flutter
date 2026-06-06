@@ -111,4 +111,38 @@ void main() {
     expect(course.classes.single.code, '00303001');
     expect(course.classes.single.arrangements.single.occupyTime, [3, 4]);
   });
+
+  test('round trips scheduled class storage payload', () {
+    final scheduled = ScheduledClass(
+      course: SchedulerCourse.fromJson({
+        'courseCode': '003030',
+        'courseName': '代数前沿选讲1',
+        'faculty': '数学科学学院',
+        'credit': 0.5,
+        'courses': const [],
+      }),
+      classInfo: SchedulerClass.fromJson({
+        'code': '00303001',
+        'campus': '四平路校区',
+        'teachers': [
+          {'teacherCode': '25171', 'teacherName': '林老师'},
+        ],
+        'arrangementInfo': [
+          {
+            'arrangementText': '星期二3-4节 [1-16] 北118',
+            'occupyDay': 2,
+            'occupyTime': [3, 4],
+            'occupyWeek': [1, 2],
+          },
+        ],
+      }),
+    );
+
+    final restored = ScheduledClass.fromJson(scheduled.toJson());
+
+    expect(restored.course.courseName, '代数前沿选讲1');
+    expect(restored.classInfo.code, '00303001');
+    expect(restored.classInfo.teachers.single.teacherName, '林老师');
+    expect(restored.classInfo.arrangements.single.occupyDay, 2);
+  });
 }

@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/cancel_token_scope.dart';
 import 'scheduler_models.dart';
@@ -94,6 +97,8 @@ class SchedulerState {
 }
 
 class SchedulerController extends AsyncNotifier<SchedulerState> {
+  static const _selectedStorageKey = 'de.yourtj.course.scheduler.selected';
+
   late SchedulerRepository _repository;
   late CancelToken _cancelToken;
 
@@ -141,6 +146,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
               code: selectedMajorCode,
               cancelToken: _cancelToken,
             );
+      final selected = await _restoreSelectedClasses();
       return SchedulerState(
         calendars: calendars,
         selectedCalendarId: calendarId,
@@ -150,6 +156,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         selectedMajorCode: selectedMajorCode,
         majorCourses: majorCourses,
         optionalTypes: results[1] as List<OptionalCourseType>,
+        selected: selected,
       );
     } catch (error) {
       if (isRequestCancellation(error)) {
@@ -389,23 +396,22 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       ScheduledClass(course: course, classInfo: classInfo),
     ];
     state = AsyncData(current.copyWith(selected: selected, notice: '已加入模拟课表'));
+    _persistSelectedClasses(selected);
   }
 
   void removeClass(String code) {
     final current = state.value ?? const SchedulerState();
-    state = AsyncData(
-      current.copyWith(
-        selected: current.selected
-            .where((item) => !_isSameBaseCourse(item.classInfo.code, code))
-            .toList(growable: false),
-        clearNotice: true,
-      ),
-    );
+    final selected = current.selected
+        .where((item) => !_isSameBaseCourse(item.classInfo.code, code))
+        .toList(growable: false);
+    state = AsyncData(current.copyWith(selected: selected, clearNotice: true));
+    _persistSelectedClasses(selected);
   }
 
   void clearSelectedClasses() {
     final current = state.value ?? const SchedulerState();
     state = AsyncData(current.copyWith(selected: const [], clearNotice: true));
+    _persistSelectedClasses(const []);
   }
 
   ScheduledClass? classAt(int day, int slot) {
@@ -447,6 +453,29 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     }
 
     return strip(left) == strip(right);
+  }
+
+  Future<List<ScheduledClass>> _restoreSelectedClasses() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_selectedStorageKey);
+      if (raw == null || raw.isEmpty) return const [];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded.map(ScheduledClass.fromJson).toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {
+    final preferences = await SharedPreferences.getInstance();
+    if (selected.isEmpty) {
+      await preferences.remove(_selectedStorageKey);
+      return;
+    }
+    final data = selected.map((item) => item.toJson()).toList(growable: false);
+    await preferences.setString(_selectedStorageKey, jsonEncode(data));
   }
 
   Future<void> _guard(Future<void> Function() run) async {

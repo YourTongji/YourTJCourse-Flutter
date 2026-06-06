@@ -108,6 +108,19 @@ class SchedulerCourse {
     );
   }
 
+  Map<String, Object?> toJson() {
+    return {
+      'courseCode': courseCode,
+      'courseName': courseName,
+      'credit': credit,
+      'faculty': faculty,
+      'courseNature': courseNature,
+      'campus': campus,
+      'grade': grade,
+      'courses': classes.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+
   final String courseCode;
   final String courseName;
   final double credit;
@@ -150,6 +163,20 @@ class SchedulerClass {
     );
   }
 
+  Map<String, Object?> toJson() {
+    return {
+      'code': code,
+      'campus': campus,
+      'teachers': teachers.map((item) => item.toJson()).toList(growable: false),
+      'teachingLanguage': teachingLanguage,
+      'arrangementInfo': arrangements
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'isExclusive': isExclusive,
+      'status': status,
+    };
+  }
+
   final String code;
   final String campus;
   final List<TeacherInfo> teachers;
@@ -168,6 +195,10 @@ class TeacherInfo {
       teacherName: readString(map['teacherName']) ?? '',
       teacherCode: readString(map['teacherCode']) ?? '',
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {'teacherName': teacherName, 'teacherCode': teacherCode};
   }
 
   final String teacherName;
@@ -203,6 +234,17 @@ class ArrangementInfo {
     );
   }
 
+  Map<String, Object?> toJson() {
+    return {
+      'arrangementText': arrangementText,
+      'occupyDay': occupyDay,
+      'occupyTime': occupyTime,
+      'occupyWeek': occupyWeek,
+      'occupyRoom': occupyRoom,
+      'teacherAndCode': teacherAndCode,
+    };
+  }
+
   final String arrangementText;
   final int occupyDay;
   final List<int> occupyTime;
@@ -214,6 +256,18 @@ class ArrangementInfo {
 class ScheduledClass {
   const ScheduledClass({required this.course, required this.classInfo});
 
+  factory ScheduledClass.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return ScheduledClass(
+      course: SchedulerCourse.fromJson(map['course']),
+      classInfo: SchedulerClass.fromJson(map['classInfo']),
+    );
+  }
+
   final SchedulerCourse course;
   final SchedulerClass classInfo;
+
+  Map<String, Object?> toJson() {
+    return {'course': course.toJson(), 'classInfo': classInfo.toJson()};
+  }
 }
