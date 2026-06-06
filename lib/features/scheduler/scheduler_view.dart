@@ -91,6 +91,8 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
           const SizedBox(height: 12),
           _MajorSection(state: state, controller: controller),
           const SizedBox(height: 12),
+          _MajorCandidatesSection(state: state, controller: controller),
+          const SizedBox(height: 12),
           _TimeLookupSection(state: state, controller: controller),
           if (state.selected.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -534,7 +536,6 @@ class _ResultsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sections = [
-      ('专业课程', state.majorCourses),
       ('搜索结果', state.searchCourses),
       ('时间段查课', state.timeCourses),
     ];
@@ -555,8 +556,41 @@ class _ResultsSection extends StatelessWidget {
               ],
             )
           : const EmptyState(
-              message: '输入课程名、课号、教师或选择空段后查询',
+              message: '输入课程名、课号、教师或点击空课段后查询',
               icon: Icons.manage_search_outlined,
+            ),
+    );
+  }
+}
+
+class _MajorCandidatesSection extends StatelessWidget {
+  const _MajorCandidatesSection({
+    required this.state,
+    required this.controller,
+  });
+
+  final SchedulerState state;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: state.majorCourses.isEmpty
+          ? '计划内课程候选'
+          : '计划内课程候选 · ${state.majorCourses.length} 门',
+      trailing: state.isMajorCoursesLoading ? const _MiniLoader() : null,
+      footer: '加载专业课表后，在这里选择课程教学班并加入周课表。',
+      child: state.majorCourses.isEmpty
+          ? EmptyState(
+              message: state.isMajorCoursesLoading
+                  ? '正在加载课程候选'
+                  : '请选择学期、年级和专业后点击“加载专业课表”',
+              icon: Icons.playlist_add_outlined,
+            )
+          : _CourseResultGroup(
+              title: '专业课程',
+              courses: state.majorCourses,
+              controller: controller,
             ),
     );
   }
