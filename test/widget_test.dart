@@ -7,8 +7,8 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: YourTJCourseApp()));
     await tester.pump();
 
-    expect(find.text('课程'), findsWidgets);
-    expect(find.text('钱包'), findsOneWidget);
+    expect(find.text('查课'), findsOneWidget);
+    expect(find.text('排课'), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
   });
 }

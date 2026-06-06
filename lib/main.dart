@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lkcn_ui/lkcn_ui.dart';
 
 import 'features/catalog/catalog_view.dart';
+import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
+import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
-import 'features/wallet/wallet_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,11 +22,12 @@ class YourTJCourseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'YourTJ 选课社区',
+      title: 'YourTJ选课测试',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.cyan),
+        colorScheme: ColorScheme.fromSeed(seedColor: LkcnColors.primary),
+        scaffoldBackgroundColor: LkcnColors.pageBg,
       ),
       routerConfig: _router,
     );
@@ -33,7 +36,7 @@ class YourTJCourseApp extends StatelessWidget {
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorCatalogKey = GlobalKey<NavigatorState>();
-final _shellNavigatorWalletKey = GlobalKey<NavigatorState>();
+final _shellNavigatorSchedulerKey = GlobalKey<NavigatorState>();
 final _shellNavigatorSettingsKey = GlobalKey<NavigatorState>();
 
 final _router = GoRouter(
@@ -55,11 +58,11 @@ final _router = GoRouter(
           ],
         ),
         StatefulShellBranch(
-          navigatorKey: _shellNavigatorWalletKey,
+          navigatorKey: _shellNavigatorSchedulerKey,
           routes: [
             GoRoute(
-              path: '/wallet',
-              builder: (context, state) => const WalletView(),
+              path: '/scheduler',
+              builder: (context, state) => const SchedulerView(),
             ),
           ],
         ),
@@ -73,6 +76,18 @@ final _router = GoRouter(
           ],
         ),
       ],
+    ),
+    GoRoute(
+      path: '/course/by-code/:code',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final code = state.pathParameters['code'] ?? '';
+        return CourseByCodeView(
+          courseCode: code,
+          teacherCode: state.uri.queryParameters['teacherCode'],
+          teacherName: state.uri.queryParameters['teacherName'],
+        );
+      },
     ),
     GoRoute(
       path: '/course/:id',
@@ -97,29 +112,29 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
+      bottomNavigationBar: LkcnTabbar(
+        active: navigationShell.currentIndex,
+        onChange: (index) {
           navigationShell.goBranch(
             index,
             initialLocation: index == navigationShell.currentIndex,
           );
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(Icons.school),
-            label: '课程',
+        items: const [
+          LkcnTabbarItem(
+            icon: Icons.school_outlined,
+            activeIcon: Icons.school,
+            text: '查课',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: '钱包',
+          LkcnTabbarItem(
+            icon: Icons.calendar_view_week_outlined,
+            activeIcon: Icons.calendar_view_week,
+            text: '排课',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '设置',
+          LkcnTabbarItem(
+            icon: Icons.settings_outlined,
+            activeIcon: Icons.settings,
+            text: '设置',
           ),
         ],
       ),
