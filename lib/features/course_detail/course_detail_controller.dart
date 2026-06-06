@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,12 +24,18 @@ class CourseDetailState {
     required this.relatedCourses,
     required this.hiddenReviewIds,
     this.aiSummary,
+    this.aiSummaryError,
+    this.isAiSummaryLoading = false,
+    this.isAiSummaryExpanded = false,
   });
 
   final CourseDetail detail;
   final RelatedCourses relatedCourses;
   final Set<int> hiddenReviewIds;
   final AiSummaryData? aiSummary;
+  final String? aiSummaryError;
+  final bool isAiSummaryLoading;
+  final bool isAiSummaryExpanded;
 
   List<Review> get visibleReviews {
     return detail.reviews
@@ -40,13 +48,22 @@ class CourseDetailState {
     RelatedCourses? relatedCourses,
     Set<int>? hiddenReviewIds,
     AiSummaryData? aiSummary,
+    String? aiSummaryError,
+    bool? isAiSummaryLoading,
+    bool? isAiSummaryExpanded,
     bool clearAiSummary = false,
+    bool clearAiSummaryError = false,
   }) {
     return CourseDetailState(
       detail: detail ?? this.detail,
       relatedCourses: relatedCourses ?? this.relatedCourses,
       hiddenReviewIds: hiddenReviewIds ?? this.hiddenReviewIds,
       aiSummary: clearAiSummary ? null : aiSummary ?? this.aiSummary,
+      aiSummaryError: clearAiSummaryError
+          ? null
+          : aiSummaryError ?? this.aiSummaryError,
+      isAiSummaryLoading: isAiSummaryLoading ?? this.isAiSummaryLoading,
+      isAiSummaryExpanded: isAiSummaryExpanded ?? this.isAiSummaryExpanded,
     );
   }
 }
@@ -76,12 +93,10 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
         cancelToken: _cancelToken,
       );
       final relatedCourses = await _loadRelatedCourses();
-      final aiSummary = await _loadAiSummary();
       final hiddenReviewIds = await _hiddenReviewStore.load();
       return CourseDetailState(
         detail: detail,
         relatedCourses: relatedCourses,
-        aiSummary: aiSummary,
         hiddenReviewIds: hiddenReviewIds,
       );
     } catch (error) {
@@ -111,23 +126,57 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     }
   }
 
-  Future<AiSummaryData?> _loadAiSummary() async {
+  Future<void> loadAiSummary({bool refresh = false}) async {
+    final current = state.value;
+    if (current == null || current.isAiSummaryLoading) return;
+    state = AsyncData(
+      current.copyWith(
+        isAiSummaryLoading: true,
+        isAiSummaryExpanded: true,
+        clearAiSummaryError: true,
+        clearAiSummary: refresh,
+      ),
+    );
     try {
       final response = await _courseRepository.getAiSummary(
         courseId: _courseId,
+        refresh: refresh,
         cancelToken: _cancelToken,
       );
-      return response.data;
+      final latest = state.value ?? current;
+      state = AsyncData(
+        latest.copyWith(
+          aiSummary: response.data,
+          isAiSummaryLoading: false,
+          isAiSummaryExpanded: true,
+          clearAiSummaryError: true,
+        ),
+      );
     } catch (error) {
       if (isRequestCancellation(error)) rethrow;
-      return null;
+      final latest = state.value ?? current;
+      state = AsyncData(
+        latest.copyWith(
+          aiSummaryError: error.toString(),
+          isAiSummaryLoading: false,
+          isAiSummaryExpanded: true,
+        ),
+      );
     }
   }
 
-  void dismissSummary() {
+  void toggleAiSummaryExpanded() {
     final current = state.value;
     if (current == null) return;
-    state = AsyncData(current.copyWith(clearAiSummary: true));
+    if (current.aiSummary == null &&
+        current.aiSummaryError == null &&
+        !current.isAiSummaryLoading) {
+      unawaited(loadAiSummary());
+      return;
+    }
+    state = AsyncData(
+      current.copyWith(isAiSummaryExpanded: !current.isAiSummaryExpanded),
+    );
   }
 
   Future<void> toggleLike(int reviewId) async {

@@ -24,7 +24,7 @@ class YourTJCourseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'YourTJ选课测试',
+      title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
