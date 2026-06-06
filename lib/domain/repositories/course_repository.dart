@@ -65,4 +65,23 @@ class CourseRepository {
       decode: RelatedCourses.fromJson,
     );
   }
+
+  Future<CourseDetail> getCourseByCode({
+    required String code,
+    String? teacherCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) {
+    return _client.get(
+      '/api/course/by-code/$code',
+      queryParameters: {
+        if (teacherCode != null && teacherCode.isNotEmpty)
+          'teacherCode': teacherCode,
+        if (teacherName != null && teacherName.isNotEmpty)
+          'teacherName': teacherName,
+      },
+      cancelToken: cancelToken,
+      decode: CourseDetail.fromJson,
+    );
+  }
 }
