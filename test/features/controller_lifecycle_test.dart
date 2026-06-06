@@ -83,6 +83,56 @@ void main() {
     expect(state.selected.single.course.courseName, '数据结构');
     expect(state.selected.single.classInfo.code, 'COMP001.01');
   });
+
+  test(
+    'scheduler controller hydrates rough course before adding class',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _FakeSchedulerRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(schedulerControllerProvider.future);
+      final controller = container.read(schedulerControllerProvider.notifier);
+      await controller.search(courseName: '大学物理');
+      final searched = container.read(schedulerControllerProvider).value!;
+
+      expect(searched.searchCourses.single.classes, isEmpty);
+
+      final hydrated = await controller.loadCourseClasses(
+        searched.searchCourses.single,
+      );
+      controller.addClass(hydrated, hydrated.classes.single);
+      final state = container.read(schedulerControllerProvider).value!;
+
+      expect(hydrated.classes.single.code, 'PHYS001.01');
+      expect(state.searchCourses.single.classes.single.code, 'PHYS001.01');
+      expect(state.selected.single.course.courseName, '大学物理');
+    },
+  );
+
+  test('scheduler controller loads optional course candidates', () async {
+    final container = ProviderContainer(
+      overrides: [
+        schedulerRepositoryProvider.overrideWithValue(
+          _FakeSchedulerRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(schedulerControllerProvider.future);
+    final controller = container.read(schedulerControllerProvider.notifier);
+    await controller.loadOptionalCourses();
+    final state = container.read(schedulerControllerProvider).value!;
+
+    expect(state.optionalCourses.single.courseName, '艺术导论');
+    expect(state.optionalCourses.single.courseNature, ['通识选修']);
+  });
 }
 
 class _FakeCourseRepository extends CourseRepository {
@@ -158,6 +208,43 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     ],
   );
 
+  static const roughSearchCourse = SchedulerCourse(
+    courseCode: 'PHYS001',
+    courseName: '大学物理',
+    credit: 3,
+    faculty: '物理科学与工程学院',
+    courseNature: ['公共基础课'],
+    campus: ['四平路'],
+    classes: [],
+  );
+
+  static const searchClass = SchedulerClass(
+    code: 'PHYS001.01',
+    campus: '四平路',
+    teachers: [TeacherInfo(teacherName: '王老师', teacherCode: 'T002')],
+    teachingLanguage: '中文',
+    arrangements: [
+      ArrangementInfo(
+        arrangementText: '周三 5-6 节',
+        occupyDay: 3,
+        occupyTime: [5, 6],
+        occupyWeek: [1, 2],
+        occupyRoom: 'H101',
+        teacherAndCode: '王老师 T002',
+      ),
+    ],
+  );
+
+  static const optionalCourse = SchedulerCourse(
+    courseCode: 'ART001',
+    courseName: '艺术导论',
+    credit: 2,
+    faculty: '艺术与传媒学院',
+    courseNature: ['通识选修'],
+    campus: ['四平路'],
+    classes: [],
+  );
+
   @override
   Future<List<CalendarTerm>> getAllCalendar({CancelToken? cancelToken}) async {
     return const [
@@ -193,6 +280,26 @@ class _FakeSchedulerRepository extends SchedulerRepository {
   }
 
   @override
+  Future<List<SchedulerCourse>> findCourseBySearch({
+    required int calendarId,
+    String? courseName,
+    String? courseCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) async {
+    return const [roughSearchCourse];
+  }
+
+  @override
+  Future<List<SchedulerClass>> findCourseDetailByCode({
+    required int calendarId,
+    required String courseCode,
+    CancelToken? cancelToken,
+  }) async {
+    return const [searchClass];
+  }
+
+  @override
   Future<List<OptionalCourseType>> findOptionalCourseType(
     int calendarId, {
     CancelToken? cancelToken,
@@ -200,5 +307,14 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     return const [
       OptionalCourseType(courseLabelId: 1, courseLabelName: '通识选修'),
     ];
+  }
+
+  @override
+  Future<List<SchedulerCourse>> findCourseByNatureId({
+    required int calendarId,
+    required List<int> ids,
+    CancelToken? cancelToken,
+  }) async {
+    return const [optionalCourse];
   }
 }

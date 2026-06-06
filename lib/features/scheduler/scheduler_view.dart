@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lkcn_ui/lkcn_ui.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../shared/widgets/app_states.dart';
 import 'scheduler_controller.dart';
@@ -21,6 +24,13 @@ class SchedulerView extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('排课'),
         actions: [
+          IconButton(
+            tooltip: '保存模拟课表',
+            onPressed: scheduler.value?.selected.isEmpty ?? true
+                ? null
+                : controller.saveSelectedClasses,
+            icon: const Icon(Icons.save_outlined),
+          ),
           IconButton(
             tooltip: '清空已选课程',
             onPressed: scheduler.value?.selected.isEmpty ?? true
@@ -131,6 +141,8 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
       1 => [
         _MajorCandidatesSection(state: state, controller: controller),
         const SizedBox(height: 12),
+        _OptionalCandidatesSection(state: state, controller: controller),
+        const SizedBox(height: 12),
         _ResultsSection(
           title: _resultTitle(state),
           state: state,
@@ -179,32 +191,158 @@ class _SchedulerSidebar extends StatelessWidget {
         color: scheme.surfaceContainerLow,
         border: Border(right: BorderSide(color: scheme.outlineVariant)),
       ),
-      child: LkcnCategorySidebar(
+      child: SizedBox(
         width: 76,
-        active: active,
-        onChange: onChange,
-        categories: [
-          sections[0],
-          LkcnCategoryItem(
-            text: '候选',
-            icon: Icons.playlist_add_outlined,
-            tag: state.majorCourses.isEmpty
-                ? null
-                : _compactCount(state.majorCourses.length),
-          ),
-          LkcnCategoryItem(
-            text: '已选',
-            icon: Icons.done_all_outlined,
-            dot: state.selected.isNotEmpty,
-          ),
-          sections[3],
-        ],
+        child: Column(
+          children: [
+            _SidebarButton(
+              item: sections[0],
+              selected: active == 0,
+              onTap: () => onChange(0),
+            ),
+            _SidebarButton(
+              item: LkcnCategoryItem(
+                text: '候选',
+                icon: Icons.playlist_add_outlined,
+                tag: state.majorCourses.isEmpty
+                    ? null
+                    : _compactCount(state.majorCourses.length),
+              ),
+              selected: active == 1,
+              onTap: () => onChange(1),
+            ),
+            _SidebarButton(
+              item: LkcnCategoryItem(
+                text: '已选',
+                icon: Icons.done_all_outlined,
+                dot: state.selected.isNotEmpty,
+              ),
+              selected: active == 2,
+              onTap: () => onChange(2),
+            ),
+            _SidebarButton(
+              item: sections[3],
+              selected: active == 3,
+              onTap: () => onChange(3),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   String _compactCount(int count) {
     return count > 99 ? '99+' : '$count';
+  }
+}
+
+class _SidebarButton extends StatelessWidget {
+  const _SidebarButton({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final LkcnCategoryItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: selected ? null : onTap,
+      child: ColoredBox(
+        color: selected ? scheme.surface : Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: selected ? scheme.primary : Colors.transparent,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(3),
+                  ),
+                ),
+                child: const SizedBox(width: 3, height: 18),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Icon(
+                      item.icon is IconData
+                          ? item.icon! as IconData
+                          : Icons.circle_outlined,
+                      size: 21,
+                      color: selected
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 5),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Text(
+                          item.text,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: selected
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                            color: selected
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (item.tag != null)
+                          Positioned(
+                            right: -25,
+                            top: -9,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                child: Text(
+                                  item.tag!,
+                                  style: TextStyle(
+                                    color: scheme.onPrimary,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (item.dot)
+                          Positioned(
+                            right: -8,
+                            top: -3,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: scheme.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const SizedBox(width: 7, height: 7),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -603,10 +741,30 @@ class _TimetableSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SectionCard(
       title: '周课表',
+      trailing: IconButton(
+        tooltip: '导出课表',
+        onPressed: state.selected.isEmpty ? null : () => _exportCsv(context),
+        icon: const Icon(Icons.ios_share_outlined),
+      ),
       footer: '点击空白格查询该时间段课程，长按课程格查看教学班详情。',
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       child: _TimetableGrid(state: state, controller: controller),
     );
+  }
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final file = await _writeScheduleCsv(state.selected);
+    if (!context.mounted) return;
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'text/csv')],
+        subject: '同济排课助手-课程表',
+        text: '同济排课助手-课程表.csv',
+      ),
+    );
+    if (!context.mounted) return;
+    messenger.showSnackBar(const SnackBar(content: Text('已生成课表 CSV')));
   }
 }
 
@@ -675,11 +833,101 @@ class _MajorCandidatesSection extends StatelessWidget {
                   : '请选择学期、年级和专业后点击“加载专业课表”',
               icon: Icons.playlist_add_outlined,
             )
-          : _CourseResultGroup(
-              title: '专业课程',
+          : _GroupedCourseResults(
               courses: state.majorCourses,
               controller: controller,
             ),
+    );
+  }
+}
+
+class _OptionalCandidatesSection extends StatelessWidget {
+  const _OptionalCandidatesSection({
+    required this.state,
+    required this.controller,
+  });
+
+  final SchedulerState state;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: state.optionalCourses.isEmpty
+          ? '通识选修候选'
+          : '通识选修候选 · ${state.optionalCourses.length} 门',
+      trailing: state.isBusy ? const _MiniLoader() : null,
+      footer: '加载通识选修课后，可继续选择教学班加入周课表。',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (state.optionalCourses.isEmpty)
+            EmptyState(
+              message: state.optionalTypes.isEmpty
+                  ? '当前学期暂无可加载的通识选修类型'
+                  : '点击下方按钮加载通识选修课程候选',
+              icon: Icons.auto_awesome_motion_outlined,
+            )
+          else
+            _CourseResultGroup(
+              title: '通识选修',
+              courses: state.optionalCourses,
+              controller: controller,
+            ),
+          const SizedBox(height: 10),
+          LkcnButton(
+            text: state.isBusy ? '加载中...' : '加载通识选修课',
+            icon: const Icon(Icons.auto_awesome_motion_outlined),
+            block: true,
+            round: true,
+            loading: state.isBusy,
+            disabled:
+                state.isBusy ||
+                state.selectedCalendarId == null ||
+                state.optionalTypes.isEmpty,
+            onTap: controller.loadOptionalCourses,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupedCourseResults extends StatelessWidget {
+  const _GroupedCourseResults({
+    required this.courses,
+    required this.controller,
+  });
+
+  final List<SchedulerCourse> courses;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <int, List<SchedulerCourse>>{};
+    for (final course in courses) {
+      final grade = course.grade ?? 0;
+      grouped.putIfAbsent(grade, () => []).add(course);
+    }
+    final grades = grouped.keys.toList()
+      ..sort((left, right) => right.compareTo(left));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final grade in grades) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, top: 4),
+            child: _MetricPill(
+              icon: Icons.school_outlined,
+              text: grade == 0
+                  ? '未分年级 · ${grouped[grade]!.length}'
+                  : '$grade 级 · ${grouped[grade]!.length}',
+            ),
+          ),
+          for (final course in grouped[grade]!.take(80))
+            _CourseResultRow(course: course, controller: controller),
+        ],
+      ],
     );
   }
 }
@@ -1221,16 +1469,24 @@ class _CourseResultGroup extends StatelessWidget {
   }
 }
 
-class _CourseResultRow extends StatelessWidget {
+class _CourseResultRow extends StatefulWidget {
   const _CourseResultRow({required this.course, required this.controller});
 
   final SchedulerCourse course;
   final SchedulerController controller;
 
   @override
+  State<_CourseResultRow> createState() => _CourseResultRowState();
+}
+
+class _CourseResultRowState extends State<_CourseResultRow> {
+  var _loadingClasses = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final course = widget.course;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -1238,7 +1494,7 @@ class _CourseResultRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: course.classes.isEmpty ? null : () => _showClasses(context),
+          onTap: () => _openClasses(context),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -1319,7 +1575,20 @@ class _CourseResultRow extends StatelessWidget {
                           size: LkcnButtonSize.small,
                           round: true,
                           block: true,
-                          onTap: () => _showClasses(context),
+                          onTap: () => _showClasses(context, course),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: LkcnButton.primary(
+                          text: _loadingClasses ? '加载中...' : '加入课表',
+                          icon: const Icon(Icons.add_circle_outline),
+                          size: LkcnButtonSize.small,
+                          round: true,
+                          block: true,
+                          loading: _loadingClasses,
+                          onTap: () => _openClasses(context),
                         ),
                       ),
                     ],
@@ -1333,7 +1602,27 @@ class _CourseResultRow extends StatelessWidget {
     );
   }
 
-  void _showClasses(BuildContext context) {
+  Future<void> _openClasses(BuildContext context) async {
+    if (_loadingClasses) return;
+    var course = widget.course;
+    if (course.classes.isEmpty) {
+      setState(() => _loadingClasses = true);
+      course = await widget.controller.loadCourseClasses(course);
+      if (!mounted) return;
+      setState(() => _loadingClasses = false);
+    }
+    if (course.classes.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('这门课暂无可选教学班')));
+      return;
+    }
+    if (!context.mounted) return;
+    _showClasses(context, course);
+  }
+
+  void _showClasses(BuildContext context, SchedulerCourse course) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1358,7 +1647,7 @@ class _CourseResultRow extends StatelessWidget {
               _ClassDetail(
                 course: course,
                 classInfo: classInfo,
-                controller: controller,
+                controller: widget.controller,
               ),
           ],
         ),
@@ -1704,6 +1993,43 @@ String _classSummary(SchedulerClass classInfo) {
     if (teachers.isNotEmpty) teachers,
     if (firstArrangement.isNotEmpty) firstArrangement,
   ].join('\n');
+}
+
+Future<File> _writeScheduleCsv(List<ScheduledClass> selected) async {
+  final directory = await getTemporaryDirectory();
+  final file = File('${directory.path}/同济排课助手-课程表.csv');
+  final rows = <List<String>>[
+    ['课程名称', '星期', '开始节数', '结束节数', '老师', '地点', '周数'],
+  ];
+  for (final item in selected) {
+    for (final arrangement in item.classInfo.arrangements) {
+      final times = arrangement.occupyTime;
+      final weeks = arrangement.occupyWeek;
+      rows.add([
+        item.course.courseName,
+        '${arrangement.occupyDay}',
+        times.isEmpty ? '' : '${times.first}',
+        times.isEmpty ? '' : '${times.last}',
+        item.classInfo.teachers
+            .map((teacher) => teacher.teacherName)
+            .where((name) => name.isNotEmpty)
+            .join(','),
+        arrangement.occupyRoom,
+        weeks.isEmpty ? '' : '${weeks.first}-${weeks.last}',
+      ]);
+    }
+  }
+  await file.writeAsString(rows.map(_csvRow).join('\n'));
+  return file;
+}
+
+String _csvRow(List<String> cells) {
+  return cells
+      .map((cell) {
+        final escaped = cell.replaceAll('"', '""');
+        return '"$escaped"';
+      })
+      .join(',');
 }
 
 Color _courseColor(String input) {

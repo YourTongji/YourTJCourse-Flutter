@@ -121,6 +121,19 @@ class SchedulerCourse {
     };
   }
 
+  SchedulerCourse copyWith({List<SchedulerClass>? classes}) {
+    return SchedulerCourse(
+      courseCode: courseCode,
+      courseName: courseName,
+      credit: credit,
+      faculty: faculty,
+      courseNature: courseNature,
+      campus: campus,
+      classes: classes ?? this.classes,
+      grade: grade,
+    );
+  }
+
   final String courseCode;
   final String courseName;
   final double credit;

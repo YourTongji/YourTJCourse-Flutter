@@ -90,6 +90,37 @@ class SchedulerRepository {
     );
   }
 
+  Future<List<SchedulerCourse>> findCourseByNatureId({
+    required int calendarId,
+    required List<int> ids,
+    CancelToken? cancelToken,
+  }) {
+    return _client.post(
+      '/api/findCourseByNatureId',
+      body: {'calendarId': calendarId, 'ids': ids},
+      cancelToken: cancelToken,
+      decode: (json) {
+        final groups = _unwrapList(json);
+        return groups
+            .expand((group) {
+              final map = asJsonMap(group);
+              final labelName = readString(map['courseLabelName']) ?? '';
+              final courses = map['courses'];
+              if (courses is! List) return const <SchedulerCourse>[];
+              return courses.map((courseJson) {
+                final courseMap = Map<String, Object?>.from(
+                  asJsonMap(courseJson),
+                );
+                courseMap['courseNature'] = [labelName];
+                return SchedulerCourse.fromJson(courseMap);
+              });
+            })
+            .where((item) => item.courseCode.isNotEmpty)
+            .toList(growable: false);
+      },
+    );
+  }
+
   Future<List<SchedulerCourse>> findCourseBySearch({
     required int calendarId,
     String? courseName,
@@ -116,6 +147,36 @@ class SchedulerRepository {
             .toList(growable: false);
       },
     );
+  }
+
+  Future<List<SchedulerClass>> findCourseDetailByCode({
+    required int calendarId,
+    required String courseCode,
+    CancelToken? cancelToken,
+  }) {
+    return _client.post(
+      '/api/findCourseDetailByCode',
+      body: {'calendarId': calendarId, 'courseCode': courseCode},
+      cancelToken: cancelToken,
+      decode: (json) => _unwrapList(json)
+          .map(SchedulerClass.fromJson)
+          .where((item) => item.code.isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+
+  Future<List<SchedulerCourse>> hydrateCourseClasses({
+    required int calendarId,
+    required SchedulerCourse course,
+    CancelToken? cancelToken,
+  }) async {
+    if (course.classes.isNotEmpty) return [course];
+    final classes = await findCourseDetailByCode(
+      calendarId: calendarId,
+      courseCode: course.courseCode,
+      cancelToken: cancelToken,
+    );
+    return [course.copyWith(classes: classes)];
   }
 
   Future<List<SchedulerCourse>> findCourseByTime({
