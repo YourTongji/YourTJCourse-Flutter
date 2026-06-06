@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yourtjcourse_flutter/domain/models/ai_summary.dart';
 import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
 import 'package:yourtjcourse_flutter/domain/models/runtime_state.dart';
+import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 
 void main() {
   test('decodes backend course detail compatibility fields', () {
@@ -72,5 +73,42 @@ void main() {
     expect(state.maintenance.enabled, isFalse);
     expect(state.announcements.single.title, '更新');
     expect(state.announcements.single.content, '已更新');
+  });
+
+  test('decodes scheduler major courses and teaching classes', () {
+    final course = SchedulerCourse.fromJson({
+      'courseCode': '003030',
+      'courseName': '代数前沿选讲1',
+      'faculty': '数学科学学院',
+      'credit': 0.5,
+      'grade': 2023,
+      'courseNature': ['专业选修课'],
+      'courses': [
+        {
+          'code': '00303001',
+          'campus': '四平路校区',
+          'teachers': [
+            {'teacherCode': '25171', 'teacherName': '林老师'},
+          ],
+          'teachingLanguage': '中文',
+          'arrangementInfo': [
+            {
+              'arrangementText': '星期二3-4节 [1-16] 北118',
+              'occupyDay': 2,
+              'occupyTime': [3, 4],
+              'occupyWeek': [1, 2],
+              'occupyRoom': '北118',
+              'teacherAndCode': '林老师(25171)',
+            },
+          ],
+          'isExclusive': false,
+        },
+      ],
+    });
+
+    expect(course.courseCode, '003030');
+    expect(course.classes, hasLength(1));
+    expect(course.classes.single.code, '00303001');
+    expect(course.classes.single.arrangements.single.occupyTime, [3, 4]);
   });
 }
