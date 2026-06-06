@@ -49,10 +49,10 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
   CourseDetailController(this._courseId);
 
   final int _courseId;
-  late final CourseRepository _courseRepository;
-  late final ReviewRepository _reviewRepository;
-  late final CancelToken _cancelToken;
-  late final HiddenReviewStore _hiddenReviewStore;
+  late CourseRepository _courseRepository;
+  late ReviewRepository _reviewRepository;
+  late CancelToken _cancelToken;
+  late HiddenReviewStore _hiddenReviewStore;
   late String _clientId;
 
   @override
@@ -63,23 +63,30 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     _cancelToken = scopedCancelToken(ref);
     _clientId = await ClientIdStore().loadOrCreate();
 
-    final results = await Future.wait([
-      _courseRepository.getCourseDetail(
-        id: _courseId,
-        clientId: _clientId,
-        cancelToken: _cancelToken,
-      ),
-      _courseRepository.getRelatedCourses(
-        id: _courseId,
-        cancelToken: _cancelToken,
-      ),
-      _hiddenReviewStore.load(),
-    ]);
-    return CourseDetailState(
-      detail: results[0] as CourseDetail,
-      relatedCourses: results[1] as RelatedCourses,
-      hiddenReviewIds: results[2] as Set<int>,
-    );
+    try {
+      final results = await Future.wait([
+        _courseRepository.getCourseDetail(
+          id: _courseId,
+          clientId: _clientId,
+          cancelToken: _cancelToken,
+        ),
+        _courseRepository.getRelatedCourses(
+          id: _courseId,
+          cancelToken: _cancelToken,
+        ),
+        _hiddenReviewStore.load(),
+      ]);
+      return CourseDetailState(
+        detail: results[0] as CourseDetail,
+        relatedCourses: results[1] as RelatedCourses,
+        hiddenReviewIds: results[2] as Set<int>,
+      );
+    } catch (error) {
+      if (isRequestCancellation(error) && state.value != null) {
+        return state.value!;
+      }
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {
@@ -114,7 +121,7 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
         current.copyWith(detail: current.detail.replacingReview(updated)),
       );
     } catch (error, stackTrace) {
-      if (error is DioException && CancelToken.isCancel(error)) return;
+      if (isRequestCancellation(error)) return;
       state = AsyncError<CourseDetailState>(error, stackTrace);
       state = AsyncData(current);
     }

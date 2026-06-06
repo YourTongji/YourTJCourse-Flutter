@@ -84,28 +84,41 @@ class SchedulerState {
 }
 
 class SchedulerController extends AsyncNotifier<SchedulerState> {
-  late final SchedulerRepository _repository;
-  late final CancelToken _cancelToken;
+  late SchedulerRepository _repository;
+  late CancelToken _cancelToken;
 
   @override
   Future<SchedulerState> build() async {
     _repository = ref.watch(schedulerRepositoryProvider);
     _cancelToken = scopedCancelToken(ref);
-    final calendars = await _repository.getAllCalendar(
-      cancelToken: _cancelToken,
-    );
-    if (calendars.isEmpty) return const SchedulerState();
-    final calendarId = calendars.first.calendarId;
-    final results = await Future.wait([
-      _repository.findGradeByCalendarId(calendarId, cancelToken: _cancelToken),
-      _repository.findOptionalCourseType(calendarId, cancelToken: _cancelToken),
-    ]);
-    return SchedulerState(
-      calendars: calendars,
-      selectedCalendarId: calendarId,
-      grades: results[0] as List<int>,
-      optionalTypes: results[1] as List<OptionalCourseType>,
-    );
+    try {
+      final calendars = await _repository.getAllCalendar(
+        cancelToken: _cancelToken,
+      );
+      if (calendars.isEmpty) return const SchedulerState();
+      final calendarId = calendars.first.calendarId;
+      final results = await Future.wait([
+        _repository.findGradeByCalendarId(
+          calendarId,
+          cancelToken: _cancelToken,
+        ),
+        _repository.findOptionalCourseType(
+          calendarId,
+          cancelToken: _cancelToken,
+        ),
+      ]);
+      return SchedulerState(
+        calendars: calendars,
+        selectedCalendarId: calendarId,
+        grades: results[0] as List<int>,
+        optionalTypes: results[1] as List<OptionalCourseType>,
+      );
+    } catch (error) {
+      if (isRequestCancellation(error)) {
+        return state.value ?? const SchedulerState();
+      }
+      rethrow;
+    }
   }
 
   Future<void> selectCalendar(int calendarId) async {
@@ -307,14 +320,16 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<void> _guard(Future<void> Function() run) async {
     try {
       await run();
-    } catch (error, stackTrace) {
-      if (error is DioException && CancelToken.isCancel(error)) return;
+    } catch (error) {
+      if (isRequestCancellation(error)) {
+        final current = state.value ?? const SchedulerState();
+        state = AsyncData(current.copyWith(isBusy: false));
+        return;
+      }
       final current = state.value ?? const SchedulerState();
       state = AsyncData(
         current.copyWith(isBusy: false, notice: error.toString()),
       );
-      state = AsyncError<SchedulerState>(error, stackTrace);
-      state = AsyncData(current.copyWith(isBusy: false));
     }
   }
 }
