@@ -25,6 +25,9 @@ on:
       - "pubspec.lock"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   android-test-apk:
     runs-on: ubuntu-latest
@@ -69,3 +72,15 @@ jobs:
           name: yourtjcourse-flutter-release-apks
           path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
+
+      - name: Publish dev prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev-latest --cleanup-tag --yes || true
+          gh release create dev-latest build/app/outputs/flutter-apk/app-*-release.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "YourTJ Course Dev Latest" \
+            --notes "dev 分支自动预发行包。提交：$GITHUB_SHA"
