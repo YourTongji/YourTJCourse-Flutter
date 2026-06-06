@@ -67,7 +67,7 @@ YourTJCourse-Flutter/
 本地不要求编译 APK。
 
 进入 GitHub Actions，运行 `Android Test APK`，在 Artifacts 下载
-`yourtjcourse-flutter-debug-apk` 后安装测试。
+`yourtjcourse-flutter-release-apks` 后按手机 CPU 架构安装对应 APK。
 
 ## 开发流程
 

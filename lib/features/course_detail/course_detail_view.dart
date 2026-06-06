@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
+import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
 import '../../shared/widgets/rating_stars.dart';
@@ -228,7 +229,7 @@ class ReviewCard extends StatelessWidget {
             const SizedBox(height: 12),
             RatingStars(rating: review.rating.toDouble(), size: 14),
             const SizedBox(height: 8),
-            MarkdownBody(data: review.comment),
+            MarkdownBody(data: normalizeReviewMarkdown(review.comment)),
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: onLike,
