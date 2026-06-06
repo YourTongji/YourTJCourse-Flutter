@@ -150,6 +150,20 @@ class _SelectorPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          if (state.isMajorOptionsLoading) ...[
+            const Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text('正在加载专业列表...'),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<int>(
             initialValue: state.selectedCalendarId,
             isExpanded: true,
@@ -218,17 +232,17 @@ class _SelectorPanel extends StatelessWidget {
               ],
             ),
           ],
-          if (state.isBusy) ...[
+          if (state.isMajorCoursesLoading) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(),
           ],
           const SizedBox(height: 10),
           LkcnButton(
-            text: state.isBusy ? '加载中...' : '加载专业课表',
+            text: state.isMajorCoursesLoading ? '加载中...' : '加载专业课表',
             block: true,
             round: true,
             onTap:
-                state.isBusy ||
+                state.isMajorCoursesLoading ||
                     state.selectedCalendarId == null ||
                     state.selectedGrade == null ||
                     (state.selectedMajorCode?.isEmpty ?? true)
@@ -236,9 +250,11 @@ class _SelectorPanel extends StatelessWidget {
                 : controller.loadMajorCourses,
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '按培养方案课程加载教学班，可继续手动选择具体教学班加入周课表。',
-            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -254,6 +270,7 @@ class _MajorPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final selected = state.majors
         .where((major) => major.code == state.selectedMajorCode)
         .firstOrNull;
@@ -274,8 +291,8 @@ class _MajorPickerField extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: selected == null
-                    ? LkcnColors.textSecondary
-                    : LkcnColors.textPrimary,
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -413,9 +430,11 @@ class _SearchPanelState extends State<_SearchPanel> {
             onTap: widget.state.isBusy || !_canSearch ? null : () => _submit(),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '至少填写一个检索条件。课程详情会在展开教学班时按课号实时查询。',
-            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -503,9 +522,11 @@ class _TimeLookupPanelState extends State<_TimeLookupPanel> {
                   ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '按后端可选课程范围查询，不会自动避开已选课程冲突；加课时会再次检测。',
-            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -526,31 +547,41 @@ class _TimeTablePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '点空格查该时间段课程，长课程会显示在覆盖的节次。',
-            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final cellWidth = (width - 34) / 7;
-              final cellHeight = math.max(
-                42.0,
-                math.min(58.0, cellWidth * 1.15),
-              );
-              return Column(
-                children: [
-                  _WeekHeader(leftWidth: 34),
-                  const SizedBox(height: 4),
-                  for (var section = 1; section <= 12; section++)
-                    _TimetableRow(
-                      section: section,
-                      leftWidth: 34,
-                      cellHeight: cellHeight,
-                      controller: controller,
-                    ),
-                ],
+              final availableWidth = constraints.maxWidth;
+              final compact = availableWidth < 520;
+              final leftWidth = compact ? 30.0 : 38.0;
+              final dayWidth = compact
+                  ? math.max(54.0, (availableWidth - leftWidth) / 7)
+                  : 88.0;
+              final tableWidth = leftWidth + dayWidth * 7;
+              final cellHeight = compact ? 64.0 : 70.0;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: math.max(availableWidth, tableWidth),
+                  child: Column(
+                    children: [
+                      _WeekHeader(leftWidth: leftWidth),
+                      const SizedBox(height: 6),
+                      for (var section = 1; section <= 12; section++)
+                        _TimetableRow(
+                          section: section,
+                          leftWidth: leftWidth,
+                          cellHeight: cellHeight,
+                          controller: controller,
+                        ),
+                    ],
+                  ),
+                ),
               );
             },
           ),
@@ -568,14 +599,17 @@ class _WeekHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const days = ['一', '二', '三', '四', '五', '六', '日'];
+    final theme = Theme.of(context);
     return Row(
       children: [
         SizedBox(
           width: leftWidth,
-          child: const Text(
+          child: Text(
             '节',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         for (final day in days)
@@ -606,8 +640,9 @@ class _TimetableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -615,11 +650,24 @@ class _TimetableRow extends StatelessWidget {
             width: leftWidth,
             height: cellHeight,
             child: Center(
-              child: Text(
-                '$section',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Center(
+                    child: Text(
+                      '$section',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -659,54 +707,28 @@ class _TimetableCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final item = controller.classAt(day, section);
     final filled = item != null;
+    final theme = Theme.of(context);
+    final radius = BorderRadius.circular(10);
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: radius,
       onTap: () => controller.findByTime(day: day, section: section),
       onLongPress: filled ? () => _showClassSheet(context, item) : null,
-      child: Container(
-        height: height,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: filled ? _courseColor(item.classInfo.code) : LkcnColors.pageBg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: filled ? Colors.transparent : LkcnColors.borderLight,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            filled ? _compactName(item.course.courseName) : '',
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.1,
-              color: filled ? Colors.white : LkcnColors.textTertiary,
-              fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
+      child: filled
+          ? _FilledTimetableCell(item: item, height: height, radius: radius)
+          : CustomPaint(
+              painter: _AntLineBorderPainter(
+                color: theme.colorScheme.outlineVariant,
+                radius: 10,
+              ),
+              child: Container(
+                height: height,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLowest,
+                  borderRadius: radius,
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
-  }
-
-  Color _courseColor(String input) {
-    var hash = 0;
-    for (final code in input.codeUnits) {
-      hash = (hash * 31 + code) & 0x7fffffff;
-    }
-    final hue = (hash % 360).toDouble();
-    return HSLColor.fromAHSL(1, hue, 0.62, 0.44).toColor();
-  }
-
-  String _compactName(String name) {
-    final cleaned = name
-        .replaceAll(RegExp(r'[（(][^()（）]*[）)]'), '')
-        .replaceAll(RegExp(r'\s+'), '');
-    final chars = cleaned.characters.toList();
-    if (chars.length <= 7) return cleaned;
-    return '${chars.take(6).join()}…';
   }
 
   void _showClassSheet(BuildContext context, ScheduledClass item) {
@@ -724,6 +746,119 @@ class _TimetableCell extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _FilledTimetableCell extends StatelessWidget {
+  const _FilledTimetableCell({
+    required this.item,
+    required this.height,
+    required this.radius,
+  });
+
+  final ScheduledClass item;
+  final double height;
+  final BorderRadius radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _courseColor(item.classInfo.code);
+    final teachers = item.classInfo.teachers
+        .map((teacher) => teacher.teacherName)
+        .where((name) => name.isNotEmpty)
+        .join('、');
+    final room = item.classInfo.arrangements
+        .map((arrangement) => arrangement.occupyRoom)
+        .where((name) => name.isNotEmpty)
+        .firstOrNull;
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color,
+            HSLColor.fromColor(
+              color,
+            ).withLightness(0.58).withSaturation(0.72).toColor(),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.22),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            _compactCourseName(item.course.courseName),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10.5,
+              height: 1.08,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (teachers.isNotEmpty || room != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              [if (teachers.isNotEmpty) teachers, ?room].join(' · '),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 8.5,
+                height: 1,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AntLineBorderPainter extends CustomPainter {
+  const _AntLineBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+      );
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = math.min(distance + 4, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += 8;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AntLineBorderPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.radius != radius;
   }
 }
 
@@ -807,11 +942,12 @@ class _SelectedClassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border.all(color: LkcnColors.borderLight),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(8),
         ),
         child: ListTile(
@@ -886,7 +1022,7 @@ class _SchedulerCourseCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -895,7 +1031,9 @@ class _SchedulerCourseCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              border: Border.all(color: LkcnColors.borderLight),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -941,9 +1079,9 @@ class _SchedulerCourseCard extends StatelessWidget {
                     '校区：${course.campus.join('、')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 12,
-                      color: LkcnColors.textSecondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -1030,6 +1168,7 @@ class _ClassDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final teachers = classInfo.teachers
         .map((teacher) => teacher.teacherName)
         .where((name) => name.isNotEmpty)
@@ -1042,7 +1181,7 @@ class _ClassDetail extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border.all(color: LkcnColors.borderLight),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Padding(
@@ -1075,10 +1214,10 @@ class _ClassDetail extends StatelessWidget {
                     classInfo.teachingLanguage,
                   if (arrangements.isNotEmpty) arrangements,
                 ].join('\n'),
-                style: const TextStyle(
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 12,
                   height: 1.45,
-                  color: LkcnColors.textSecondary,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1145,6 +1284,24 @@ String _classSummary(SchedulerClass classInfo) {
     if (teachers.isNotEmpty) teachers,
     if (firstArrangement.isNotEmpty) firstArrangement,
   ].join('\n');
+}
+
+Color _courseColor(String input) {
+  var hash = 0;
+  for (final code in input.codeUnits) {
+    hash = (hash * 31 + code) & 0x7fffffff;
+  }
+  final hue = (hash % 360).toDouble();
+  return HSLColor.fromAHSL(1, hue, 0.68, 0.46).toColor();
+}
+
+String _compactCourseName(String name) {
+  final cleaned = name
+      .replaceAll(RegExp(r'[（(][^()（）]*[）)]'), '')
+      .replaceAll(RegExp(r'\s+'), '');
+  final chars = cleaned.characters.toList();
+  if (chars.length <= 10) return cleaned;
+  return '${chars.take(9).join()}…';
 }
 
 String _dayName(int day) {

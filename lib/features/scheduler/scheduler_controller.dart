@@ -26,6 +26,8 @@ class SchedulerState {
     this.searchText = '',
     this.notice,
     this.isBusy = false,
+    this.isMajorOptionsLoading = false,
+    this.isMajorCoursesLoading = false,
   });
 
   final List<CalendarTerm> calendars;
@@ -42,6 +44,8 @@ class SchedulerState {
   final String searchText;
   final String? notice;
   final bool isBusy;
+  final bool isMajorOptionsLoading;
+  final bool isMajorCoursesLoading;
 
   SchedulerState copyWith({
     List<CalendarTerm>? calendars,
@@ -58,6 +62,8 @@ class SchedulerState {
     String? searchText,
     String? notice,
     bool? isBusy,
+    bool? isMajorOptionsLoading,
+    bool? isMajorCoursesLoading,
     bool clearGrade = false,
     bool clearMajor = false,
     bool clearNotice = false,
@@ -79,6 +85,10 @@ class SchedulerState {
       searchText: searchText ?? this.searchText,
       notice: clearNotice ? null : notice ?? this.notice,
       isBusy: isBusy ?? this.isBusy,
+      isMajorOptionsLoading:
+          isMajorOptionsLoading ?? this.isMajorOptionsLoading,
+      isMajorCoursesLoading:
+          isMajorCoursesLoading ?? this.isMajorCoursesLoading,
     );
   }
 }
@@ -113,10 +123,32 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
           cancelToken: _cancelToken,
         ),
       ]);
+      final grades = results[0] as List<int>;
+      final selectedGrade = grades.firstOrNull;
+      final majors = selectedGrade == null
+          ? const <MajorInfo>[]
+          : await _repository.findMajorByGrade(
+              calendarId: calendarId,
+              grade: selectedGrade,
+              cancelToken: _cancelToken,
+            );
+      final selectedMajorCode = majors.firstOrNull?.code;
+      final majorCourses = selectedGrade == null || selectedMajorCode == null
+          ? const <SchedulerCourse>[]
+          : await _repository.findCourseByMajor(
+              calendarId: calendarId,
+              grade: selectedGrade,
+              code: selectedMajorCode,
+              cancelToken: _cancelToken,
+            );
       return SchedulerState(
         calendars: calendars,
         selectedCalendarId: calendarId,
-        grades: results[0] as List<int>,
+        grades: grades,
+        selectedGrade: selectedGrade,
+        majors: majors,
+        selectedMajorCode: selectedMajorCode,
+        majorCourses: majorCourses,
         optionalTypes: results[1] as List<OptionalCourseType>,
       );
     } catch (error) {
@@ -138,6 +170,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         majors: const [],
         majorCourses: const [],
         timeCourses: const [],
+        searchCourses: const [],
         clearGrade: true,
         clearMajor: true,
         isBusy: true,
@@ -156,9 +189,31 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         ),
       ]);
       final latest = state.value ?? current;
+      final grades = results[0] as List<int>;
+      final selectedGrade = grades.firstOrNull;
+      final majors = selectedGrade == null
+          ? const <MajorInfo>[]
+          : await _repository.findMajorByGrade(
+              calendarId: calendarId,
+              grade: selectedGrade,
+              cancelToken: _cancelToken,
+            );
+      final selectedMajorCode = majors.firstOrNull?.code;
+      final majorCourses = selectedGrade == null || selectedMajorCode == null
+          ? const <SchedulerCourse>[]
+          : await _repository.findCourseByMajor(
+              calendarId: calendarId,
+              grade: selectedGrade,
+              code: selectedMajorCode,
+              cancelToken: _cancelToken,
+            );
       state = AsyncData(
         latest.copyWith(
-          grades: results[0] as List<int>,
+          grades: grades,
+          selectedGrade: selectedGrade,
+          majors: majors,
+          selectedMajorCode: selectedMajorCode,
+          majorCourses: majorCourses,
           optionalTypes: results[1] as List<OptionalCourseType>,
           isBusy: false,
         ),
@@ -178,6 +233,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         majorCourses: const [],
         clearMajor: true,
         isBusy: true,
+        isMajorOptionsLoading: true,
         clearNotice: true,
       ),
     );
@@ -188,7 +244,24 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         cancelToken: _cancelToken,
       );
       final latest = state.value ?? current;
-      state = AsyncData(latest.copyWith(majors: majors, isBusy: false));
+      final selectedMajorCode = majors.firstOrNull?.code;
+      final majorCourses = selectedMajorCode == null
+          ? const <SchedulerCourse>[]
+          : await _repository.findCourseByMajor(
+              calendarId: calendarId,
+              grade: grade,
+              code: selectedMajorCode,
+              cancelToken: _cancelToken,
+            );
+      state = AsyncData(
+        latest.copyWith(
+          majors: majors,
+          selectedMajorCode: selectedMajorCode,
+          majorCourses: majorCourses,
+          isBusy: false,
+          isMajorOptionsLoading: false,
+        ),
+      );
     });
   }
 
@@ -212,7 +285,14 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       return;
     }
     state = AsyncData(
-      current.copyWith(majorCourses: const [], isBusy: true, clearNotice: true),
+      current.copyWith(
+        majorCourses: const [],
+        searchCourses: const [],
+        timeCourses: const [],
+        isBusy: true,
+        isMajorCoursesLoading: true,
+        clearNotice: true,
+      ),
     );
     await _guard(() async {
       final courses = await _repository.findCourseByMajor(
@@ -222,7 +302,13 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         cancelToken: _cancelToken,
       );
       final latest = state.value ?? current;
-      state = AsyncData(latest.copyWith(majorCourses: courses, isBusy: false));
+      state = AsyncData(
+        latest.copyWith(
+          majorCourses: courses,
+          isBusy: false,
+          isMajorCoursesLoading: false,
+        ),
+      );
     });
   }
 
@@ -240,7 +326,14 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       teacherName,
     ].map((item) => item.trim()).where((item) => item.isNotEmpty).join(' / ');
     state = AsyncData(
-      current.copyWith(searchText: keyword, isBusy: true, clearNotice: true),
+      current.copyWith(
+        searchText: keyword,
+        majorCourses: const [],
+        searchCourses: const [],
+        timeCourses: const [],
+        isBusy: true,
+        clearNotice: true,
+      ),
     );
     await _guard(() async {
       final courses = await _repository.findCourseBySearch(
@@ -259,7 +352,15 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;
     if (calendarId == null) return;
-    state = AsyncData(current.copyWith(isBusy: true, clearNotice: true));
+    state = AsyncData(
+      current.copyWith(
+        majorCourses: const [],
+        searchCourses: const [],
+        timeCourses: const [],
+        isBusy: true,
+        clearNotice: true,
+      ),
+    );
     await _guard(() async {
       final courses = await _repository.findCourseByTime(
         calendarId: calendarId,
@@ -349,12 +450,23 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     } catch (error) {
       if (isRequestCancellation(error)) {
         final current = state.value ?? const SchedulerState();
-        state = AsyncData(current.copyWith(isBusy: false));
+        state = AsyncData(
+          current.copyWith(
+            isBusy: false,
+            isMajorOptionsLoading: false,
+            isMajorCoursesLoading: false,
+          ),
+        );
         return;
       }
       final current = state.value ?? const SchedulerState();
       state = AsyncData(
-        current.copyWith(isBusy: false, notice: error.toString()),
+        current.copyWith(
+          isBusy: false,
+          isMajorOptionsLoading: false,
+          isMajorCoursesLoading: false,
+          notice: error.toString(),
+        ),
       );
     }
   }

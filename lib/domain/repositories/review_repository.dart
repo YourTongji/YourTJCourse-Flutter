@@ -1,12 +1,20 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../models/json_helpers.dart';
 import '../models/report_reason.dart';
 
 final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
   return ReviewRepository(ref.watch(apiClientProvider));
+});
+
+final captchaRepositoryProvider = Provider<CaptchaRepository>((ref) {
+  return CaptchaRepository(
+    ref.watch(dioProvider),
+    ref.watch(appConfigProvider),
+  );
 });
 
 class ReviewRepository {
@@ -53,6 +61,62 @@ class ReviewRepository {
       decode: ReportResponse.fromJson,
     );
   }
+
+  Future<CreateReviewResponse> createReview({
+    required int courseId,
+    required int rating,
+    required String comment,
+    required String semester,
+    required String captchaToken,
+    String? reviewerName,
+    String? reviewerAvatar,
+    CancelToken? cancelToken,
+  }) {
+    return _client.post(
+      '/api/review',
+      body: {
+        'course_id': courseId,
+        'rating': rating,
+        'comment': comment,
+        'semester': semester,
+        'turnstile_token': captchaToken,
+        if (reviewerName != null && reviewerName.trim().isNotEmpty)
+          'reviewer_name': reviewerName.trim(),
+        if (reviewerAvatar != null && reviewerAvatar.trim().isNotEmpty)
+          'reviewer_avatar': reviewerAvatar.trim(),
+      },
+      cancelToken: cancelToken,
+      decode: CreateReviewResponse.fromJson,
+    );
+  }
+}
+
+class CaptchaRepository {
+  const CaptchaRepository(this._dio, this._config);
+
+  final Dio _dio;
+  final AppConfig _config;
+
+  Future<CaptchaChallenge> fetchChallenge({CancelToken? cancelToken}) async {
+    final response = await _dio.get<Object?>(
+      '${_config.captchaApiBaseUrl}/api/captcha',
+      cancelToken: cancelToken,
+    );
+    return CaptchaChallenge.fromJson(response.data, _config.captchaApiBaseUrl);
+  }
+
+  Future<CaptchaVerifyResponse> verify({
+    required String puzzleToken,
+    required List<int> selectedIndices,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _dio.post<Object?>(
+      '${_config.captchaApiBaseUrl}/api/verify',
+      data: {'puzzle_token': puzzleToken, 'selected_indices': selectedIndices},
+      cancelToken: cancelToken,
+    );
+    return CaptchaVerifyResponse.fromJson(response.data);
+  }
 }
 
 class LikeResponse {
@@ -89,4 +153,63 @@ class ReportResponse {
 
   final bool success;
   final int? reportId;
+}
+
+class CreateReviewResponse {
+  const CreateReviewResponse({required this.success, this.reviewId});
+
+  factory CreateReviewResponse.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return CreateReviewResponse(
+      success: readBool(map['success']) ?? false,
+      reviewId: readInt(map['reviewId']),
+    );
+  }
+
+  final bool success;
+  final int? reviewId;
+}
+
+class CaptchaChallenge {
+  const CaptchaChallenge({
+    required this.puzzleToken,
+    required this.prompt,
+    required this.images,
+  });
+
+  factory CaptchaChallenge.fromJson(Object? json, String baseUrl) {
+    final map = asJsonMap(json);
+    return CaptchaChallenge(
+      puzzleToken: readString(map['puzzle_token']) ?? '',
+      prompt: readString(map['prompt']) ?? '请选择符合条件的图片',
+      images: readStringList(map['images'])
+          .map((url) => url.startsWith('http') ? url : '$baseUrl$url')
+          .toList(growable: false),
+    );
+  }
+
+  final String puzzleToken;
+  final String prompt;
+  final List<String> images;
+}
+
+class CaptchaVerifyResponse {
+  const CaptchaVerifyResponse({
+    required this.success,
+    this.token,
+    this.message,
+  });
+
+  factory CaptchaVerifyResponse.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return CaptchaVerifyResponse(
+      success: readBool(map['success']) ?? false,
+      token: readString(map['token']),
+      message: readString(map['message']),
+    );
+  }
+
+  final bool success;
+  final String? token;
+  final String? message;
 }

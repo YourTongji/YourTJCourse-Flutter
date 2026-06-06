@@ -234,6 +234,33 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     await _hiddenReviewStore.save(hidden);
     state = AsyncData(current.copyWith(hiddenReviewIds: hidden));
   }
+
+  Future<bool> createReview({
+    required int rating,
+    required String comment,
+    required String semester,
+    required String captchaToken,
+    String? reviewerName,
+    String? reviewerAvatar,
+  }) async {
+    try {
+      final response = await _reviewRepository.createReview(
+        courseId: _courseId,
+        rating: rating,
+        comment: comment,
+        semester: semester,
+        captchaToken: captchaToken,
+        reviewerName: reviewerName,
+        reviewerAvatar: reviewerAvatar,
+        cancelToken: _cancelToken,
+      );
+      if (!response.success) return false;
+      ref.invalidateSelf();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 class HiddenReviewStore {

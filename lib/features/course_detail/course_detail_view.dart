@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/ai_summary.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
+import '../../domain/repositories/review_repository.dart';
 import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
@@ -24,6 +25,13 @@ class CourseDetailView extends ConsumerWidget {
     );
 
     return Scaffold(
+      floatingActionButton: detail.hasValue
+          ? FloatingActionButton.extended(
+              onPressed: () => _showReviewSheet(context, ref, controller),
+              icon: const Icon(Icons.rate_review_outlined),
+              label: const Text('写评价'),
+            )
+          : null,
       body: detail.when(
         loading: () => const LoadingState(message: '正在加载课程详情'),
         error: (error, _) =>
@@ -176,6 +184,356 @@ class CourseDetailView extends ConsumerWidget {
         );
       },
     );
+  }
+
+  void _showReviewSheet(
+    BuildContext context,
+    WidgetRef ref,
+    CourseDetailController controller,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _ReviewComposeSheet(
+        controller: controller,
+        captchaRepository: ref.read(captchaRepositoryProvider),
+      ),
+    );
+  }
+}
+
+class _ReviewComposeSheet extends StatefulWidget {
+  const _ReviewComposeSheet({
+    required this.controller,
+    required this.captchaRepository,
+  });
+
+  final CourseDetailController controller;
+  final CaptchaRepository captchaRepository;
+
+  @override
+  State<_ReviewComposeSheet> createState() => _ReviewComposeSheetState();
+}
+
+class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
+  final _commentController = TextEditingController();
+  final _semesterController = TextEditingController();
+  final _nameController = TextEditingController();
+  int _rating = 0;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    _semesterController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final valid = _rating > 0 && _commentController.text.trim().isNotEmpty;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('写评价', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var star = 1; star <= 5; star++)
+                    IconButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => setState(() => _rating = star),
+                      icon: Icon(
+                        star <= _rating ? Icons.star : Icons.star_border,
+                        color: star <= _rating
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _commentController,
+                minLines: 5,
+                maxLines: 8,
+                maxLength: 10000,
+                decoration: const InputDecoration(
+                  labelText: '评价内容',
+                  alignLabelWithHint: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _semesterController,
+                decoration: const InputDecoration(
+                  labelText: '学期',
+                  hintText: '如 2025-2026-1，不填则为其他',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: '昵称（选填）'),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: valid && !_isSubmitting ? _submit : null,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.verified_user_outlined),
+                label: Text(_isSubmitting ? '提交中...' : '验证并提交'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final captchaToken = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) =>
+          _CaptchaSheet(captchaRepository: widget.captchaRepository),
+    );
+    if (captchaToken == null || captchaToken.isEmpty || !mounted) return;
+    setState(() => _isSubmitting = true);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await widget.controller.createReview(
+      rating: _rating,
+      comment: _commentController.text.trim(),
+      semester: _semesterController.text.trim().isEmpty
+          ? '其他'
+          : _semesterController.text.trim(),
+      captchaToken: captchaToken,
+      reviewerName: _nameController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    if (ok) {
+      navigator.pop();
+      messenger.showSnackBar(const SnackBar(content: Text('评价提交成功')));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('评价提交失败，请稍后重试')));
+  }
+}
+
+class _CaptchaSheet extends ConsumerStatefulWidget {
+  const _CaptchaSheet({required this.captchaRepository});
+
+  final CaptchaRepository captchaRepository;
+
+  @override
+  ConsumerState<_CaptchaSheet> createState() => _CaptchaSheetState();
+}
+
+class _CaptchaSheetState extends ConsumerState<_CaptchaSheet> {
+  CaptchaChallenge? _challenge;
+  final Set<int> _selected = {};
+  String? _message;
+  bool _loading = true;
+  bool _verifying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+      _selected.clear();
+    });
+    try {
+      final challenge = await widget.captchaRepository.fetchChallenge();
+      if (!mounted) return;
+      setState(() {
+        _challenge = challenge;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = '验证码加载失败，请重试';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final challenge = _challenge;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('YOURTJ 人机验证', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              challenge?.prompt ?? '请选择符合条件的图片',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            if (_loading)
+              const SizedBox(
+                height: 220,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (challenge == null)
+              SizedBox(
+                height: 140,
+                child: Center(child: Text(_message ?? '验证码不可用')),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                ),
+                itemCount: challenge.images.length,
+                itemBuilder: (context, index) {
+                  final selected = _selected.contains(index);
+                  return InkWell(
+                    onTap: _verifying
+                        ? null
+                        : () => setState(() {
+                            selected
+                                ? _selected.remove(index)
+                                : _selected.add(index);
+                          }),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            challenge.images[index],
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        if (selected)
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.38,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: theme.colorScheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            if (_message != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _message!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _loading || _verifying ? null : _load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('换一组'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: _verifying
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      challenge == null || _selected.isEmpty || _verifying
+                      ? null
+                      : _verify,
+                  child: Text(_verifying ? '验证中...' : '确认'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _verify() async {
+    final challenge = _challenge;
+    if (challenge == null) return;
+    setState(() {
+      _verifying = true;
+      _message = null;
+    });
+    try {
+      final response = await widget.captchaRepository.verify(
+        puzzleToken: challenge.puzzleToken,
+        selectedIndices: _selected.toList(growable: false)..sort(),
+      );
+      if (!mounted) return;
+      if (response.success && (response.token?.isNotEmpty ?? false)) {
+        Navigator.of(context).pop(response.token);
+        return;
+      }
+      setState(() {
+        _message = response.message ?? '验证失败，请重试';
+        _verifying = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = '网络错误，请重试';
+        _verifying = false;
+      });
+    }
   }
 }
 
@@ -472,9 +830,12 @@ class _SkeletonBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.54),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.54,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
