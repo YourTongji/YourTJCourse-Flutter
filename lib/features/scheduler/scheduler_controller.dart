@@ -91,11 +91,17 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<SchedulerState> build() async {
     _repository = ref.watch(schedulerRepositoryProvider);
     _cancelToken = scopedCancelToken(ref);
+    return _loadInitial();
+  }
+
+  Future<SchedulerState> _loadInitial() async {
     try {
       final calendars = await _repository.getAllCalendar(
         cancelToken: _cancelToken,
       );
-      if (calendars.isEmpty) return const SchedulerState();
+      if (calendars.isEmpty) {
+        return const SchedulerState();
+      }
       final calendarId = calendars.first.calendarId;
       final results = await Future.wait([
         _repository.findGradeByCalendarId(
@@ -117,7 +123,9 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       if (isRequestCancellation(error)) {
         return state.value ?? const SchedulerState();
       }
-      rethrow;
+      return (state.value ?? const SchedulerState()).copyWith(
+        notice: error.toString(),
+      );
     }
   }
 
@@ -184,18 +192,27 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
-  Future<void> selectMajor(String code) async {
+  void selectMajor(String code) {
     final current = state.value ?? const SchedulerState();
-    final calendarId = current.selectedCalendarId;
-    final grade = current.selectedGrade;
-    if (calendarId == null || grade == null) return;
     state = AsyncData(
       current.copyWith(
         selectedMajorCode: code,
         majorCourses: const [],
-        isBusy: true,
         clearNotice: true,
       ),
+    );
+  }
+
+  Future<void> loadMajorCourses() async {
+    final current = state.value ?? const SchedulerState();
+    final calendarId = current.selectedCalendarId;
+    final grade = current.selectedGrade;
+    final code = current.selectedMajorCode;
+    if (calendarId == null || grade == null || code == null || code.isEmpty) {
+      return;
+    }
+    state = AsyncData(
+      current.copyWith(majorCourses: const [], isBusy: true, clearNotice: true),
     );
     await _guard(() async {
       final courses = await _repository.findCourseByMajor(
@@ -209,19 +226,28 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
-  Future<void> search(String text, SchedulerSearchField field) async {
+  Future<void> search({
+    String courseName = '',
+    String courseCode = '',
+    String teacherName = '',
+  }) async {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;
     if (calendarId == null) return;
+    final keyword = [
+      courseName,
+      courseCode,
+      teacherName,
+    ].map((item) => item.trim()).where((item) => item.isNotEmpty).join(' / ');
     state = AsyncData(
-      current.copyWith(searchText: text, isBusy: true, clearNotice: true),
+      current.copyWith(searchText: keyword, isBusy: true, clearNotice: true),
     );
     await _guard(() async {
       final courses = await _repository.findCourseBySearch(
         calendarId: calendarId,
-        courseName: field == SchedulerSearchField.courseName ? text : null,
-        courseCode: field == SchedulerSearchField.courseCode ? text : null,
-        teacherName: field == SchedulerSearchField.teacherName ? text : null,
+        courseName: courseName.trim().isEmpty ? null : courseName.trim(),
+        courseCode: courseCode.trim().isEmpty ? null : courseCode.trim(),
+        teacherName: teacherName.trim().isEmpty ? null : teacherName.trim(),
         cancelToken: _cancelToken,
       );
       final latest = state.value ?? current;
@@ -332,14 +358,4 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       );
     }
   }
-}
-
-enum SchedulerSearchField {
-  courseName('课程名'),
-  courseCode('课号'),
-  teacherName('教师');
-
-  const SchedulerSearchField(this.label);
-
-  final String label;
 }

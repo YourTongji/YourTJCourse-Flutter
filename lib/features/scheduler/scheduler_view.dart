@@ -28,7 +28,11 @@ class SchedulerView extends ConsumerWidget {
         ),
       ),
       body: scheduler.when(
-        loading: () => const LoadingState(message: '正在加载排课数据'),
+        loading: () => _SchedulerBody(
+          state: const SchedulerState(isBusy: true),
+          controller: controller,
+          onRefresh: () async => ref.invalidate(schedulerControllerProvider),
+        ),
         error: (error, _) => ErrorState(
           message: error.toString(),
           onRetry: () => ref.invalidate(schedulerControllerProvider),
@@ -59,17 +63,10 @@ class _SchedulerBody extends StatefulWidget {
 }
 
 class _SchedulerBodyState extends State<_SchedulerBody> {
-  int _tab = 0;
-
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isCompact = width < 720;
-    final children = [
-      _TimeTablePanel(state: widget.state, controller: widget.controller),
-      _CoursePickerPanel(state: widget.state, controller: widget.controller),
-      _SelectedPanel(state: widget.state, controller: widget.controller),
-    ];
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
@@ -86,50 +83,44 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
               padding: const EdgeInsets.only(bottom: 12),
               child: LkcnNoticeBar(text: widget.state.notice!),
             ),
+          _SearchPanel(state: widget.state, controller: widget.controller),
+          const SizedBox(height: 12),
           _SelectorPanel(state: widget.state, controller: widget.controller),
           const SizedBox(height: 12),
-          if (isCompact) ...[
-            LkcnTabs(
-              active: _tab,
-              onChange: (index) => setState(() => _tab = index),
-              tabs: [
-                const LkcnTabItem(title: '课表'),
-                LkcnTabItem(
-                  title: '选课',
-                  badge: _badge(_candidateCount(widget.state)),
-                ),
-                LkcnTabItem(
-                  title: '详情',
-                  badge: _badge(widget.state.selected.length),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            children[_tab],
-          ] else ...[
+          _TimeLookupPanel(state: widget.state, controller: widget.controller),
+          const SizedBox(height: 12),
+          _SelectedPanel(state: widget.state, controller: widget.controller),
+          const SizedBox(height: 12),
+          if (!isCompact) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 6, child: children[0]),
+                Expanded(
+                  flex: 6,
+                  child: _TimeTablePanel(
+                    state: widget.state,
+                    controller: widget.controller,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(flex: 5, child: children[1]),
+                Expanded(
+                  flex: 5,
+                  child: _ResultsPanel(
+                    state: widget.state,
+                    controller: widget.controller,
+                  ),
+                ),
               ],
             ),
+          ] else ...[
+            _TimeTablePanel(state: widget.state, controller: widget.controller),
             const SizedBox(height: 12),
-            children[2],
+            _ResultsPanel(state: widget.state, controller: widget.controller),
           ],
         ],
       ),
     );
   }
-
-  int _candidateCount(SchedulerState state) {
-    return state.majorCourses.length +
-        state.searchCourses.length +
-        state.timeCourses.length;
-  }
-
-  int? _badge(int count) => count > 0 ? count : null;
 }
 
 class _SelectorPanel extends StatelessWidget {
@@ -141,10 +132,24 @@ class _SelectorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LkcnCard(
-      title: '培养方案查课',
+      title: '专业课表',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (state.isBusy && state.calendars.isEmpty) ...[
+            const Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text('正在加载排课数据...'),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<int>(
             initialValue: state.selectedCalendarId,
             isExpanded: true,
@@ -179,23 +184,9 @@ class _SelectorPanel extends StatelessWidget {
                   if (value != null) controller.selectGrade(value);
                 },
               );
-              final major = DropdownButtonFormField<String>(
-                initialValue: state.selectedMajorCode,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: '专业'),
-                items: [
-                  for (final major in state.majors)
-                    DropdownMenuItem(
-                      value: major.code,
-                      child: Text(
-                        '${major.code} ${major.name}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) controller.selectMajor(value);
-                },
+              final major = _MajorPickerField(
+                state: state,
+                controller: controller,
               );
               if (compact) {
                 return Column(
@@ -231,35 +222,148 @@ class _SelectorPanel extends StatelessWidget {
             const SizedBox(height: 12),
             const LinearProgressIndicator(),
           ],
+          const SizedBox(height: 10),
+          LkcnButton(
+            text: state.isBusy ? '加载中...' : '加载专业课表',
+            block: true,
+            round: true,
+            onTap:
+                state.isBusy ||
+                    state.selectedCalendarId == null ||
+                    state.selectedGrade == null ||
+                    (state.selectedMajorCode?.isEmpty ?? true)
+                ? null
+                : controller.loadMajorCourses,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '按培养方案课程加载教学班，可继续手动选择具体教学班加入周课表。',
+            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+          ),
         ],
       ),
     );
   }
 }
 
-class _CoursePickerPanel extends StatelessWidget {
-  const _CoursePickerPanel({required this.state, required this.controller});
+class _MajorPickerField extends StatelessWidget {
+  const _MajorPickerField({required this.state, required this.controller});
 
   final SchedulerState state;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _SearchPanel(state: state, controller: controller),
-        const SizedBox(height: 12),
-        _CourseSection(
-          title: '专业课程',
-          courses: state.majorCourses,
-          controller: controller,
-        ),
-        _CourseSection(
-          title: '搜索结果',
-          courses: state.searchCourses,
-          controller: controller,
-        ),
-      ],
+    final selected = state.majors
+        .where((major) => major.code == state.selectedMajorCode)
+        .firstOrNull;
+    return OutlinedButton(
+      onPressed: state.majors.isEmpty
+          ? null
+          : () => _showMajorSheet(context, state.majors),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              selected == null ? '选择专业' : '${selected.code} ${selected.name}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected == null
+                    ? LkcnColors.textSecondary
+                    : LkcnColors.textPrimary,
+              ),
+            ),
+          ),
+          const Icon(Icons.search, size: 18),
+        ],
+      ),
+    );
+  }
+
+  void _showMajorSheet(BuildContext context, List<MajorInfo> majors) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _MajorSearchSheet(
+        majors: majors,
+        onSelect: (code) {
+          Navigator.of(context).maybePop();
+          controller.selectMajor(code);
+        },
+      ),
+    );
+  }
+}
+
+class _MajorSearchSheet extends StatefulWidget {
+  const _MajorSearchSheet({required this.majors, required this.onSelect});
+
+  final List<MajorInfo> majors;
+  final ValueChanged<String> onSelect;
+
+  @override
+  State<_MajorSearchSheet> createState() => _MajorSearchSheetState();
+}
+
+class _MajorSearchSheetState extends State<_MajorSearchSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final keyword = _query.trim().toLowerCase();
+    final filtered = keyword.isEmpty
+        ? widget.majors
+        : widget.majors
+              .where(
+                (major) =>
+                    major.code.toLowerCase().contains(keyword) ||
+                    major.name.toLowerCase().contains(keyword),
+              )
+              .toList(growable: false);
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.36,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: TextField(
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '搜索专业',
+                  hintText: '输入专业名称或代码',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final major = filtered[index];
+                  return ListTile(
+                    title: Text(major.name),
+                    subtitle: Text(major.code),
+                    onTap: () => widget.onSelect(major.code),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -275,8 +379,9 @@ class _SearchPanel extends StatefulWidget {
 }
 
 class _SearchPanelState extends State<_SearchPanel> {
-  String _text = '';
-  SchedulerSearchField _field = SchedulerSearchField.courseName;
+  String _courseName = '';
+  String _courseCode = '';
+  String _teacherName = '';
 
   @override
   Widget build(BuildContext context) {
@@ -285,43 +390,126 @@ class _SearchPanelState extends State<_SearchPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              for (final field in SchedulerSearchField.values)
-                ChoiceChip(
-                  label: Text(field.label),
-                  selected: field == _field,
-                  onSelected: (_) => setState(() => _field = field),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
+          TextField(
+            decoration: const InputDecoration(labelText: '课程名'),
+            onChanged: (value) => setState(() => _courseName = value),
           ),
           const SizedBox(height: 10),
-          LkcnSearchBar(
-            value: _text,
-            placeholder: '请输入${_field.label}',
-            showAction: false,
-            onChanged: (value) => setState(() => _text = value),
-            onSubmitted: (value) => _submit(value),
+          TextField(
+            decoration: const InputDecoration(labelText: '课号'),
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (value) => setState(() => _courseCode = value),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            decoration: const InputDecoration(labelText: '教师姓名'),
+            onChanged: (value) => setState(() => _teacherName = value),
           ),
           const SizedBox(height: 10),
           LkcnButton.primary(
-            text: '搜索课程',
+            text: widget.state.isBusy ? '搜索中...' : '搜索课程',
             block: true,
             round: true,
-            onTap: _text.trim().isEmpty ? null : () => _submit(_text),
+            onTap: widget.state.isBusy || !_canSearch ? null : () => _submit(),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '至少填写一个检索条件。课程详情会在展开教学班时按课号实时查询。',
+            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
           ),
         ],
       ),
     );
   }
 
-  void _submit(String value) {
-    final text = value.trim();
-    if (text.isEmpty) return;
-    widget.controller.search(text, _field);
+  bool get _canSearch {
+    return _courseName.trim().isNotEmpty ||
+        _courseCode.trim().isNotEmpty ||
+        _teacherName.trim().isNotEmpty;
+  }
+
+  void _submit() {
+    widget.controller.search(
+      courseName: _courseName,
+      courseCode: _courseCode,
+      teacherName: _teacherName,
+    );
+  }
+}
+
+class _TimeLookupPanel extends StatefulWidget {
+  const _TimeLookupPanel({required this.state, required this.controller});
+
+  final SchedulerState state;
+  final SchedulerController controller;
+
+  @override
+  State<_TimeLookupPanel> createState() => _TimeLookupPanelState();
+}
+
+class _TimeLookupPanelState extends State<_TimeLookupPanel> {
+  int _day = 1;
+  int _section = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return LkcnCard(
+      title: '空段找课',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _day,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '星期'),
+                  items: [
+                    for (var day = 1; day <= 7; day++)
+                      DropdownMenuItem(value: day, child: Text(_dayName(day))),
+                  ],
+                  onChanged: (value) => setState(() => _day = value ?? 1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _section,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '节次'),
+                  items: [
+                    for (var section = 1; section <= 6; section++)
+                      DropdownMenuItem(
+                        value: section,
+                        child: Text(_sectionGroupName(section)),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _section = value ?? 1),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          LkcnButton(
+            text: '按时间找可选课',
+            block: true,
+            round: true,
+            onTap: widget.state.selectedCalendarId == null
+                ? null
+                : () => widget.controller.findByTime(
+                    day: _day,
+                    section: _section,
+                  ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '按后端可选课程范围查询，不会自动避开已选课程冲突；加课时会再次检测。',
+            style: TextStyle(fontSize: 12, color: LkcnColors.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -355,7 +543,7 @@ class _TimeTablePanel extends StatelessWidget {
                 children: [
                   _WeekHeader(leftWidth: 34),
                   const SizedBox(height: 4),
-                  for (var section = 1; section <= 6; section++)
+                  for (var section = 1; section <= 12; section++)
                     _TimetableRow(
                       section: section,
                       leftWidth: 34,
@@ -418,7 +606,6 @@ class _TimetableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final slot = section * 2 - 1;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -444,7 +631,6 @@ class _TimetableRow extends StatelessWidget {
                 child: _TimetableCell(
                   day: day,
                   section: section,
-                  slot: slot,
                   height: cellHeight,
                   controller: controller,
                 ),
@@ -460,20 +646,18 @@ class _TimetableCell extends StatelessWidget {
   const _TimetableCell({
     required this.day,
     required this.section,
-    required this.slot,
     required this.height,
     required this.controller,
   });
 
   final int day;
   final int section;
-  final int slot;
   final double height;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
-    final item = controller.classAt(day, slot);
+    final item = controller.classAt(day, section);
     final filled = item != null;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -564,11 +748,51 @@ class _SelectedPanel extends StatelessWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 12),
-        _CourseSection(
-          title: '时间段查课',
-          courses: state.timeCourses,
-          controller: controller,
+      ],
+    );
+  }
+}
+
+class _ResultsPanel extends StatelessWidget {
+  const _ResultsPanel({required this.state, required this.controller});
+
+  final SchedulerState state;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final count =
+        state.majorCourses.length +
+        state.searchCourses.length +
+        state.timeCourses.length;
+    return Column(
+      children: [
+        LkcnCard(
+          title: count == 0 ? '查询结果' : '查询结果 ($count)',
+          child: count == 0
+              ? const EmptyState(message: '输入课程名、课号、教师或选择空段后查询')
+              : Column(
+                  children: [
+                    _CourseSection(
+                      title: '专业课程',
+                      courses: state.majorCourses,
+                      controller: controller,
+                      embedded: true,
+                    ),
+                    _CourseSection(
+                      title: '搜索结果',
+                      courses: state.searchCourses,
+                      controller: controller,
+                      embedded: true,
+                    ),
+                    _CourseSection(
+                      title: '时间段查课',
+                      courses: state.timeCourses,
+                      controller: controller,
+                      embedded: true,
+                    ),
+                  ],
+                ),
         ),
       ],
     );
@@ -617,24 +841,36 @@ class _CourseSection extends StatelessWidget {
     required this.title,
     required this.courses,
     required this.controller,
+    this.embedded = false,
   });
 
   final String title;
   final List<SchedulerCourse> courses;
   final SchedulerController controller;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     if (courses.isEmpty) return const SizedBox.shrink();
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (embedded) ...[
+          Text(
+            '$title (${courses.length})',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+        ],
+        for (final course in courses.take(80))
+          _SchedulerCourseCard(course: course, controller: controller),
+      ],
+    );
+    if (embedded) return content;
     return LkcnCard(
       title: '$title (${courses.length})',
       padding: const EdgeInsets.all(10),
-      child: Column(
-        children: [
-          for (final course in courses.take(80))
-            _SchedulerCourseCard(course: course, controller: controller),
-        ],
-      ),
+      child: content,
     );
   }
 }
@@ -909,6 +1145,22 @@ String _classSummary(SchedulerClass classInfo) {
     if (teachers.isNotEmpty) teachers,
     if (firstArrangement.isNotEmpty) firstArrangement,
   ].join('\n');
+}
+
+String _dayName(int day) {
+  return const ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'][day];
+}
+
+String _sectionGroupName(int section) {
+  return const [
+    '',
+    '1-2 节',
+    '3-4 节',
+    '5-6 节',
+    '7-8 节',
+    '第 9 节',
+    '10-12 节',
+  ][section];
 }
 
 String _formatCredit(double credit) {
