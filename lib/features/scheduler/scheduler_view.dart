@@ -66,55 +66,158 @@ class _SchedulerBody extends StatefulWidget {
 }
 
 class _SchedulerBodyState extends State<_SchedulerBody> {
+  var _activeSection = 0;
+
+  static const _sections = [
+    LkcnCategoryItem(text: '筛选', icon: Icons.tune_outlined),
+    LkcnCategoryItem(text: '候选', icon: Icons.playlist_add_outlined),
+    LkcnCategoryItem(text: '已选', icon: Icons.done_all_outlined),
+    LkcnCategoryItem(text: '课表', icon: Icons.view_week_outlined),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
     final controller = widget.controller;
-    final theme = Theme.of(context);
-    final count =
-        state.majorCourses.length +
-        state.searchCourses.length +
-        state.timeCourses.length;
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SchedulerHero(state: state),
-          if (state.notice != null) ...[
-            const SizedBox(height: 10),
-            _NoticeStrip(text: state.notice!),
-          ],
-          const SizedBox(height: 12),
-          _SearchSection(state: state, controller: controller),
-          const SizedBox(height: 12),
-          _MajorSection(state: state, controller: controller),
-          const SizedBox(height: 12),
-          _MajorCandidatesSection(state: state, controller: controller),
-          const SizedBox(height: 12),
-          _TimeLookupSection(state: state, controller: controller),
-          if (state.selected.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _SelectedSection(state: state, controller: controller),
-          ],
-          const SizedBox(height: 12),
-          _TimetableSection(state: state, controller: controller),
-          const SizedBox(height: 12),
-          _ResultsSection(
-            title: count == 0 ? '查询结果' : '查询结果 · $count 门',
+          _SchedulerSidebar(
+            sections: _sections,
+            active: _activeSection,
             state: state,
-            controller: controller,
+            onChange: (index) => setState(() => _activeSection = index),
           ),
-          const SizedBox(height: 6),
-          Text(
-            '下拉刷新同步排课数据。点击空格可按时间找课，长按已选课程查看详情。',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+              children: [
+                _SchedulerHero(state: state),
+                if (state.notice != null) ...[
+                  const SizedBox(height: 10),
+                  _NoticeStrip(text: state.notice!),
+                ],
+                const SizedBox(height: 12),
+                ..._sectionContent(
+                  state: state,
+                  controller: controller,
+                  section: _activeSection,
+                ),
+                const SizedBox(height: 6),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<Widget> _sectionContent({
+    required SchedulerState state,
+    required SchedulerController controller,
+    required int section,
+  }) {
+    return switch (section) {
+      0 => [
+        _MajorSection(state: state, controller: controller),
+        const SizedBox(height: 12),
+        _SearchSection(state: state, controller: controller),
+        const SizedBox(height: 12),
+        _TimeLookupSection(state: state, controller: controller),
+      ],
+      1 => [
+        _MajorCandidatesSection(state: state, controller: controller),
+        const SizedBox(height: 12),
+        _ResultsSection(
+          title: _resultTitle(state),
+          state: state,
+          controller: controller,
+        ),
+      ],
+      2 => [
+        state.selected.isEmpty
+            ? const _SelectedEmptySection()
+            : _SelectedSection(state: state, controller: controller),
+      ],
+      _ => [
+        _TimetableSection(state: state, controller: controller),
+        if (state.selected.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SelectedSection(state: state, controller: controller),
+        ],
+      ],
+    };
+  }
+
+  String _resultTitle(SchedulerState state) {
+    final count = state.searchCourses.length + state.timeCourses.length;
+    return count == 0 ? '查询结果' : '查询结果 · $count 门';
+  }
+}
+
+class _SchedulerSidebar extends StatelessWidget {
+  const _SchedulerSidebar({
+    required this.sections,
+    required this.active,
+    required this.state,
+    required this.onChange,
+  });
+
+  final List<LkcnCategoryItem> sections;
+  final int active;
+  final SchedulerState state;
+  final ValueChanged<int> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border(right: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: LkcnCategorySidebar(
+        width: 76,
+        active: active,
+        onChange: onChange,
+        categories: [
+          sections[0],
+          LkcnCategoryItem(
+            text: '候选',
+            icon: Icons.playlist_add_outlined,
+            tag: state.majorCourses.isEmpty
+                ? null
+                : _compactCount(state.majorCourses.length),
+          ),
+          LkcnCategoryItem(
+            text: '已选',
+            icon: Icons.done_all_outlined,
+            dot: state.selected.isNotEmpty,
+          ),
+          sections[3],
+        ],
+      ),
+    );
+  }
+
+  String _compactCount(int count) {
+    return count > 99 ? '99+' : '$count';
+  }
+}
+
+class _SelectedEmptySection extends StatelessWidget {
+  const _SelectedEmptySection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _SectionCard(
+      title: '已选课程',
+      child: EmptyState(
+        message: '从候选课程中选择教学班后，会在这里保存模拟排课记录',
+        icon: Icons.bookmark_add_outlined,
       ),
     );
   }
@@ -142,22 +245,7 @@ class _SchedulerHero extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: scheme.primary.withValues(alpha: 0.18),
-                    blurRadius: 18,
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(9),
-                child: Image.asset('assets/images/app_logo.png', width: 42),
-              ),
-            ),
+            Image.asset('assets/images/app_logo.png', width: 46, height: 46),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
