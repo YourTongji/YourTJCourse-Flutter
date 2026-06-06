@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +46,40 @@ ThemeData _buildTheme(Brightness brightness) {
     brightness: brightness,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: colorScheme.surface,
+    appBarTheme: AppBarTheme(
+      backgroundColor: colorScheme.surface,
+      foregroundColor: colorScheme.onSurface,
+      elevation: 0,
+      centerTitle: false,
+      surfaceTintColor: Colors.transparent,
+    ),
+    cardTheme: CardThemeData(
+      color: colorScheme.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: colorScheme.surface,
+      indicatorColor: colorScheme.primaryContainer,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w700
+              : FontWeight.w500,
+          color: states.contains(WidgetState.selected)
+              ? colorScheme.primary
+              : colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ),
   );
 }
 
@@ -124,34 +160,195 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AnnouncementGate(
-      child: Scaffold(
-        body: navigationShell,
-        bottomNavigationBar: LkcnTabbar(
-          active: navigationShell.currentIndex,
-          onChange: (index) {
-            navigationShell.goBranch(
-              index,
-              initialLocation: index == navigationShell.currentIndex,
-            );
-          },
-          items: const [
-            LkcnTabbarItem(
-              icon: Icons.school_outlined,
-              activeIcon: Icons.school,
-              text: '查课',
+      child: _SplashGate(
+        child: Scaffold(
+          body: navigationShell,
+          bottomNavigationBar: _AppNavigationBar(
+            active: navigationShell.currentIndex,
+            onChange: (index) {
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplashGate extends StatefulWidget {
+  const _SplashGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<_SplashGate> {
+  var _visible = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _visible = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        IgnorePointer(
+          ignoring: !_visible,
+          child: AnimatedOpacity(
+            opacity: _visible ? 1 : 0,
+            duration: const Duration(milliseconds: 260),
+            child: _visible ? const _SplashOverlay() : const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SplashOverlay extends StatelessWidget {
+  const _SplashOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: scheme.surface,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LogoPulse(size: 92),
+            const SizedBox(height: 18),
+            Text(
+              'YourTJ Course',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
             ),
-            LkcnTabbarItem(
-              icon: Icons.calendar_view_week_outlined,
-              activeIcon: Icons.calendar_view_week,
-              text: '排课',
-            ),
-            LkcnTabbarItem(
-              icon: Icons.more_horiz,
-              activeIcon: Icons.more,
-              text: '更多',
+            const SizedBox(height: 6),
+            Text(
+              '正在同步选课数据',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LogoPulse extends StatefulWidget {
+  const _LogoPulse({this.size = 56});
+
+  final double size;
+
+  @override
+  State<_LogoPulse> createState() => _LogoPulseState();
+}
+
+class _LogoPulseState extends State<_LogoPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final scale = 0.96 + _controller.value * 0.06;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: scheme.primary.withValues(alpha: 0.18),
+                blurRadius: 28 + _controller.value * 12,
+              ),
+            ],
+          ),
+          child: Transform.scale(scale: scale, child: child),
+        );
+      },
+      child: Image.asset(
+        'assets/images/app_logo.png',
+        width: widget.size,
+        height: widget.size,
+      ),
+    );
+  }
+}
+
+class _AppNavigationBar extends StatelessWidget {
+  const _AppNavigationBar({required this.active, required this.onChange});
+
+  final int active;
+  final ValueChanged<int> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: NavigationBar(
+        selectedIndex: active,
+        onDestinationSelected: onChange,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.manage_search_outlined),
+            selectedIcon: Icon(Icons.manage_search),
+            label: '查课',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.view_week_outlined),
+            selectedIcon: Icon(Icons.view_week),
+            label: '排课',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune),
+            label: '更多',
+          ),
+        ],
       ),
     );
   }

@@ -403,6 +403,11 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     );
   }
 
+  void clearSelectedClasses() {
+    final current = state.value ?? const SchedulerState();
+    state = AsyncData(current.copyWith(selected: const [], clearNotice: true));
+  }
+
   ScheduledClass? classAt(int day, int slot) {
     final current = state.value;
     if (current == null) return null;
