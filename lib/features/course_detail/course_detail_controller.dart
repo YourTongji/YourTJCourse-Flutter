@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/cancel_token_scope.dart';
 import '../../core/storage/client_id_store.dart';
+import '../../domain/models/ai_summary.dart';
 import '../../domain/models/course_detail.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
@@ -20,11 +21,13 @@ class CourseDetailState {
     required this.detail,
     required this.relatedCourses,
     required this.hiddenReviewIds,
+    this.aiSummary,
   });
 
   final CourseDetail detail;
   final RelatedCourses relatedCourses;
   final Set<int> hiddenReviewIds;
+  final AiSummaryData? aiSummary;
 
   List<Review> get visibleReviews {
     return detail.reviews
@@ -36,11 +39,14 @@ class CourseDetailState {
     CourseDetail? detail,
     RelatedCourses? relatedCourses,
     Set<int>? hiddenReviewIds,
+    AiSummaryData? aiSummary,
+    bool clearAiSummary = false,
   }) {
     return CourseDetailState(
       detail: detail ?? this.detail,
       relatedCourses: relatedCourses ?? this.relatedCourses,
       hiddenReviewIds: hiddenReviewIds ?? this.hiddenReviewIds,
+      aiSummary: clearAiSummary ? null : aiSummary ?? this.aiSummary,
     );
   }
 }
@@ -64,22 +70,19 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     _clientId = await ClientIdStore().loadOrCreate();
 
     try {
-      final results = await Future.wait([
-        _courseRepository.getCourseDetail(
-          id: _courseId,
-          clientId: _clientId,
-          cancelToken: _cancelToken,
-        ),
-        _courseRepository.getRelatedCourses(
-          id: _courseId,
-          cancelToken: _cancelToken,
-        ),
-        _hiddenReviewStore.load(),
-      ]);
+      final detail = await _courseRepository.getCourseDetail(
+        id: _courseId,
+        clientId: _clientId,
+        cancelToken: _cancelToken,
+      );
+      final relatedCourses = await _loadRelatedCourses();
+      final aiSummary = await _loadAiSummary();
+      final hiddenReviewIds = await _hiddenReviewStore.load();
       return CourseDetailState(
-        detail: results[0] as CourseDetail,
-        relatedCourses: results[1] as RelatedCourses,
-        hiddenReviewIds: results[2] as Set<int>,
+        detail: detail,
+        relatedCourses: relatedCourses,
+        aiSummary: aiSummary,
+        hiddenReviewIds: hiddenReviewIds,
       );
     } catch (error) {
       if (isRequestCancellation(error) && state.value != null) {
@@ -91,6 +94,40 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
 
   Future<void> refresh() async {
     ref.invalidateSelf();
+  }
+
+  Future<RelatedCourses> _loadRelatedCourses() async {
+    try {
+      return await _courseRepository.getRelatedCourses(
+        id: _courseId,
+        cancelToken: _cancelToken,
+      );
+    } catch (error) {
+      if (isRequestCancellation(error)) rethrow;
+      return const RelatedCourses(
+        teacherOtherCourses: [],
+        sameCourseOtherTeachers: [],
+      );
+    }
+  }
+
+  Future<AiSummaryData?> _loadAiSummary() async {
+    try {
+      final response = await _courseRepository.getAiSummary(
+        courseId: _courseId,
+        cancelToken: _cancelToken,
+      );
+      return response.data;
+    } catch (error) {
+      if (isRequestCancellation(error)) rethrow;
+      return null;
+    }
+  }
+
+  void dismissSummary() {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(clearAiSummary: true));
   }
 
   Future<void> toggleLike(int reviewId) async {

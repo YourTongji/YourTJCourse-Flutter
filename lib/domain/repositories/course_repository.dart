@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../models/ai_summary.dart';
 import '../models/course.dart';
 import '../models/course_detail.dart';
 import '../models/paginated_response.dart';
@@ -63,6 +64,19 @@ class CourseRepository {
       '/api/course/$id/related',
       cancelToken: cancelToken,
       decode: RelatedCourses.fromJson,
+    );
+  }
+
+  Future<AiSummaryResponse> getAiSummary({
+    required int courseId,
+    bool refresh = false,
+    CancelToken? cancelToken,
+  }) {
+    return _client.get(
+      '/api/course/$courseId/summary',
+      queryParameters: {if (refresh) 'refresh': 'true'},
+      cancelToken: cancelToken,
+      decode: AiSummaryResponse.fromJson,
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/ai_summary.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
 import '../../shared/markdown/review_markdown.dart';
@@ -67,6 +68,13 @@ class CourseDetailView extends ConsumerWidget {
                           Text(
                             course.description!,
                             style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                        if (state.aiSummary?.hasContent ?? false) ...[
+                          const SizedBox(height: 16),
+                          AiSummaryCard(
+                            summary: state.aiSummary!,
+                            onDismiss: controller.dismissSummary,
                           ),
                         ],
                       ],
@@ -163,6 +171,128 @@ class CourseDetailView extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class AiSummaryCard extends StatelessWidget {
+  const AiSummaryCard({
+    super.key,
+    required this.summary,
+    required this.onDismiss,
+  });
+
+  final AiSummaryData summary;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card.filled(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('AI 课程总结', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.cancel),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('综合评价', style: theme.textTheme.labelMedium),
+            Text(
+              summary.ratingConsensus,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (summary.keywords.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final keyword in summary.keywords)
+                    Chip(label: Text(keyword)),
+                ],
+              ),
+            ],
+            _SummaryPointList(
+              title: '优点',
+              icon: Icons.add_circle,
+              color: Colors.green,
+              items: summary.pros,
+            ),
+            _SummaryPointList(
+              title: '缺点',
+              icon: Icons.remove_circle,
+              color: Colors.orange,
+              items: summary.cons,
+            ),
+            if (summary.representative.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('代表评价', style: theme.textTheme.labelMedium),
+              const SizedBox(height: 6),
+              Text(
+                summary.representative.first.text,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryPointList extends StatelessWidget {
+  const _SummaryPointList({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.items,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.labelMedium),
+          const SizedBox(height: 6),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(item, style: theme.textTheme.bodySmall)),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
