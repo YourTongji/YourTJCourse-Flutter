@@ -129,6 +129,8 @@ jobs:
         run: |
           echo "registry=https://repo.harmonyos.com/npm/" > .npmrc
           mkdir -p "$RUNNER_TEMP/harmonyos-bin"
+          export HARMONYOS_HVIGOR_CLI_HOME="$RUNNER_TEMP/harmonyos-hvigor"
+          echo "HARMONYOS_HVIGOR_CLI_HOME=$HARMONYOS_HVIGOR_CLI_HOME" >> $GITHUB_ENV
 
           cat > "$RUNNER_TEMP/harmonyos-bin/ohpm" <<'EOF'
           #!/usr/bin/env bash
@@ -165,14 +167,14 @@ jobs:
 
           export npm_config_userconfig="$PROJECT_ROOT/.npmrc"
           export npm_config_update_notifier=false
-          exec node "$PROJECT_ROOT/node_modules/@ohos/hvigor/bin/hvigor.js" "$@"
+          exec node "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js" "$@"
           EOF
 
           chmod +x "$RUNNER_TEMP/harmonyos-bin/ohpm" "$RUNNER_TEMP/harmonyos-bin/hvigorw"
           echo "$RUNNER_TEMP/harmonyos-bin" >> $GITHUB_PATH
-          npm install --no-save @ohos/hvigor@5.2.2 @ohos/hvigor-ohos-plugin@5.2.2
+          npm install --prefix "$HARMONYOS_HVIGOR_CLI_HOME" --no-save @ohos/hvigor@5.2.2 @ohos/hvigor-ohos-plugin@5.2.2
           "$RUNNER_TEMP/harmonyos-bin/ohpm" --version
-          "$RUNNER_TEMP/harmonyos-bin/hvigorw" --version
+          test -f "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js"
 
       # Step C: Build HAP with --no-pub (skip re-resolution, use fixed config)
       - name: Build HAP
