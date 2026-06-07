@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -1540,14 +1541,9 @@ class _ReviewShareImagePainter {
       maxWidth: 380,
       maxLines: 3,
     );
-    final comment = _measureText(
-      review.comment,
-      const TextStyle(
-        color: Color(0xFF334155),
-        fontSize: 16,
-        height: 1.72,
-        fontWeight: FontWeight.w500,
-      ),
+    final commentBlocks = _parseShareMarkdown(review.comment);
+    final commentHeight = _measureMarkdownBlocks(
+      commentBlocks,
       maxWidth: _contentWidth - 44,
     );
     final chipsHeight = _measurePills([
@@ -1565,7 +1561,7 @@ class _ReviewShareImagePainter {
         18 +
         chipsHeight +
         22 +
-        comment.height +
+        commentHeight +
         44 +
         22 +
         18 +
@@ -1689,21 +1685,16 @@ class _ReviewShareImagePainter {
     );
 
     y += 22;
-    final commentPainter = _layoutText(
-      review.comment,
-      const TextStyle(
-        color: Color(0xFF334155),
-        fontSize: 16,
-        height: 1.72,
-        fontWeight: FontWeight.w500,
-      ),
+    final commentBlocks = _parseShareMarkdown(review.comment);
+    final commentHeight = _measureMarkdownBlocks(
+      commentBlocks,
       maxWidth: _contentWidth - 44,
     );
     final commentRect = Rect.fromLTWH(
       _padding,
       y,
       _contentWidth,
-      commentPainter.height + 44,
+      commentHeight + 44,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(commentRect, const Radius.circular(22)),
@@ -1716,7 +1707,12 @@ class _ReviewShareImagePainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
-    commentPainter.paint(canvas, Offset(_padding + 22, y + 22));
+    _paintMarkdownBlocks(
+      canvas,
+      commentBlocks,
+      Offset(_padding + 22, y + 22),
+      maxWidth: _contentWidth - 44,
+    );
     y += commentRect.height + 22;
 
     _paintText(
@@ -1923,6 +1919,175 @@ class _ReviewShareImagePainter {
     return Size(maxWidth, height);
   }
 
+  static double _measureMarkdownBlocks(
+    List<_ShareMarkdownBlock> blocks, {
+    required double maxWidth,
+  }) {
+    var height = 0.0;
+    for (final block in blocks) {
+      height += _markdownBlockHeight(block, maxWidth);
+    }
+    return math.max(28, height);
+  }
+
+  static double _paintMarkdownBlocks(
+    Canvas canvas,
+    List<_ShareMarkdownBlock> blocks,
+    Offset offset, {
+    required double maxWidth,
+  }) {
+    var y = offset.dy;
+    for (final block in blocks) {
+      y += _paintMarkdownBlock(canvas, block, Offset(offset.dx, y), maxWidth);
+    }
+    return y - offset.dy;
+  }
+
+  static double _markdownBlockHeight(
+    _ShareMarkdownBlock block,
+    double maxWidth,
+  ) {
+    final style = _markdownTextStyle(block);
+    final leftInset = _markdownLeftInset(block);
+    final textWidth = math.max(20.0, maxWidth - leftInset);
+    if (block.type == _ShareMarkdownBlockType.divider) return 18;
+    final painter = _layoutText(
+      _markdownDisplayText(block),
+      style,
+      maxWidth: textWidth,
+    );
+    return painter.height + _markdownBottomSpacing(block);
+  }
+
+  static double _paintMarkdownBlock(
+    Canvas canvas,
+    _ShareMarkdownBlock block,
+    Offset offset,
+    double maxWidth,
+  ) {
+    if (block.type == _ShareMarkdownBlockType.divider) {
+      canvas.drawLine(
+        Offset(offset.dx, offset.dy + 8),
+        Offset(offset.dx + maxWidth, offset.dy + 8),
+        Paint()
+          ..color = const Color(0xFFE2E8F0)
+          ..strokeWidth = 1,
+      );
+      return 18;
+    }
+
+    final leftInset = _markdownLeftInset(block);
+    final style = _markdownTextStyle(block);
+    final text = _markdownDisplayText(block);
+    final textWidth = math.max(20.0, maxWidth - leftInset);
+    final painter = _layoutText(text, style, maxWidth: textWidth);
+    final textOffset = Offset(offset.dx + leftInset, offset.dy);
+
+    if (block.type == _ShareMarkdownBlockType.quote) {
+      final rect = Rect.fromLTWH(
+        offset.dx,
+        offset.dy,
+        maxWidth,
+        painter.height + 8,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+        Paint()..color = const Color(0xFFF8FAFC),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(offset.dx, offset.dy, 4, painter.height + 8),
+          const Radius.circular(999),
+        ),
+        Paint()..color = const Color(0xFFCBD5E1),
+      );
+      painter.paint(canvas, Offset(textOffset.dx, textOffset.dy + 4));
+    } else if (block.type == _ShareMarkdownBlockType.code) {
+      final rect = Rect.fromLTWH(
+        offset.dx,
+        offset.dy,
+        maxWidth,
+        painter.height + 18,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(14)),
+        Paint()..color = const Color(0xFF0F172A),
+      );
+      painter.paint(canvas, Offset(textOffset.dx + 12, textOffset.dy + 9));
+    } else {
+      if (block.type == _ShareMarkdownBlockType.bullet) {
+        canvas.drawCircle(
+          Offset(offset.dx + 5, offset.dy + 11),
+          3,
+          Paint()..color = const Color(0xFF38BDF8),
+        );
+      }
+      painter.paint(canvas, textOffset);
+    }
+
+    return _markdownBlockHeight(block, maxWidth);
+  }
+
+  static double _markdownLeftInset(_ShareMarkdownBlock block) {
+    return switch (block.type) {
+      _ShareMarkdownBlockType.bullet => 18,
+      _ShareMarkdownBlockType.quote => 16,
+      _ShareMarkdownBlockType.code => 0,
+      _ => 0,
+    };
+  }
+
+  static double _markdownBottomSpacing(_ShareMarkdownBlock block) {
+    return switch (block.type) {
+      _ShareMarkdownBlockType.heading => 10,
+      _ShareMarkdownBlockType.bullet => 4,
+      _ShareMarkdownBlockType.quote => 10,
+      _ShareMarkdownBlockType.code => 16,
+      _ShareMarkdownBlockType.paragraph => 10,
+      _ShareMarkdownBlockType.divider => 0,
+    };
+  }
+
+  static TextStyle _markdownTextStyle(_ShareMarkdownBlock block) {
+    return switch (block.type) {
+      _ShareMarkdownBlockType.heading => const TextStyle(
+        color: Color(0xFF0F172A),
+        fontSize: 19,
+        height: 1.36,
+        fontWeight: FontWeight.w900,
+      ),
+      _ShareMarkdownBlockType.bullet => const TextStyle(
+        color: Color(0xFF334155),
+        fontSize: 16,
+        height: 1.62,
+        fontWeight: FontWeight.w500,
+      ),
+      _ShareMarkdownBlockType.quote => const TextStyle(
+        color: Color(0xFF475569),
+        fontSize: 15,
+        height: 1.58,
+        fontWeight: FontWeight.w600,
+      ),
+      _ShareMarkdownBlockType.code => const TextStyle(
+        color: Color(0xFFE2E8F0),
+        fontSize: 13,
+        height: 1.55,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.w600,
+      ),
+      _ => const TextStyle(
+        color: Color(0xFF334155),
+        fontSize: 16,
+        height: 1.72,
+        fontWeight: FontWeight.w500,
+      ),
+    };
+  }
+
+  static String _markdownDisplayText(_ShareMarkdownBlock block) {
+    return block.text.trim();
+  }
+
   static double _paintPillWrap(
     Canvas canvas,
     List<_ShareImagePill> pills,
@@ -2039,6 +2204,168 @@ class _ShareImagePill {
   final String text;
   final Color foreground;
   final Color background;
+}
+
+enum _ShareMarkdownBlockType {
+  paragraph,
+  heading,
+  bullet,
+  quote,
+  code,
+  divider,
+}
+
+class _ShareMarkdownBlock {
+  const _ShareMarkdownBlock({required this.type, required this.text});
+
+  final _ShareMarkdownBlockType type;
+  final String text;
+}
+
+List<_ShareMarkdownBlock> _parseShareMarkdown(String source) {
+  final normalized = normalizeReviewMarkdown(source).trim();
+  if (normalized.isEmpty) {
+    return const [
+      _ShareMarkdownBlock(type: _ShareMarkdownBlockType.paragraph, text: ' '),
+    ];
+  }
+
+  final document = md.Document(
+    extensionSet: md.ExtensionSet.gitHubFlavored,
+    encodeHtml: false,
+  );
+  final blocks = document
+      .parse(normalized)
+      .expand(_shareMarkdownBlocksFromNode)
+      .toList(growable: false);
+  return blocks.isEmpty
+      ? const [
+          _ShareMarkdownBlock(
+            type: _ShareMarkdownBlockType.paragraph,
+            text: ' ',
+          ),
+        ]
+      : blocks;
+}
+
+Iterable<_ShareMarkdownBlock> _shareMarkdownBlocksFromNode(md.Node node) {
+  if (node is! md.Element) {
+    final text = _shareMarkdownText(node).trim();
+    return text.isEmpty
+        ? const []
+        : [
+            _ShareMarkdownBlock(
+              type: _ShareMarkdownBlockType.paragraph,
+              text: text,
+            ),
+          ];
+  }
+
+  switch (node.tag) {
+    case 'h1':
+    case 'h2':
+    case 'h3':
+    case 'h4':
+    case 'h5':
+    case 'h6':
+      return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.heading);
+    case 'p':
+      return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.paragraph);
+    case 'blockquote':
+      return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.quote);
+    case 'pre':
+      return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.code);
+    case 'hr':
+      return const [
+        _ShareMarkdownBlock(type: _ShareMarkdownBlockType.divider, text: ''),
+      ];
+    case 'ul':
+    case 'ol':
+      return _shareMarkdownListBlocks(node);
+    case 'table':
+      return _shareMarkdownTableBlocks(node);
+    default:
+      final children = node.children;
+      if (children == null || children.isEmpty) {
+        final text = _shareMarkdownText(node).trim();
+        return text.isEmpty
+            ? const []
+            : [
+                _ShareMarkdownBlock(
+                  type: _ShareMarkdownBlockType.paragraph,
+                  text: text,
+                ),
+              ];
+      }
+      return children.expand(_shareMarkdownBlocksFromNode);
+  }
+}
+
+Iterable<_ShareMarkdownBlock> _singleShareMarkdownBlock(
+  md.Node node,
+  _ShareMarkdownBlockType type,
+) {
+  final text = _shareMarkdownText(node).trim();
+  return text.isEmpty
+      ? const []
+      : [_ShareMarkdownBlock(type: type, text: text)];
+}
+
+Iterable<_ShareMarkdownBlock> _shareMarkdownListBlocks(md.Element list) {
+  final children = list.children ?? const <md.Node>[];
+  return children
+      .whereType<md.Element>()
+      .where((item) => item.tag == 'li')
+      .map((item) {
+        final text = _shareMarkdownText(item).trim();
+        return _ShareMarkdownBlock(
+          type: _ShareMarkdownBlockType.bullet,
+          text: text,
+        );
+      })
+      .where((block) => block.text.isNotEmpty);
+}
+
+Iterable<_ShareMarkdownBlock> _shareMarkdownTableBlocks(md.Element table) {
+  final rows = <String>[];
+  void collectRows(md.Node node) {
+    if (node is! md.Element) return;
+    if (node.tag == 'tr') {
+      final cells = (node.children ?? const <md.Node>[])
+          .whereType<md.Element>()
+          .where((cell) => cell.tag == 'th' || cell.tag == 'td')
+          .map((cell) => _shareMarkdownText(cell).trim())
+          .where((text) => text.isNotEmpty)
+          .join(' / ');
+      if (cells.isNotEmpty) rows.add(cells);
+      return;
+    }
+    for (final child in node.children ?? const <md.Node>[]) {
+      collectRows(child);
+    }
+  }
+
+  collectRows(table);
+  return rows.map(
+    (row) =>
+        _ShareMarkdownBlock(type: _ShareMarkdownBlockType.paragraph, text: row),
+  );
+}
+
+String _shareMarkdownText(md.Node node) {
+  if (node is md.Text) return node.text;
+  if (node is! md.Element) return node.textContent;
+  if (node.tag == 'br') return '\n';
+  if (node.tag == 'img') return node.attributes['alt'] ?? '';
+  final children = node.children;
+  if (children == null || children.isEmpty) return node.textContent;
+  final buffer = StringBuffer();
+  for (final child in children) {
+    final text = _shareMarkdownText(child);
+    if (text.isEmpty) continue;
+    buffer.write(text);
+  }
+  return buffer.toString();
 }
 
 Future<void> showReviewShareDialog(

@@ -2334,7 +2334,13 @@ class _ClassDetail extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
+              _SchedulerClassReviewBadge(
+                course: course,
+                classInfo: classInfo,
+                controller: controller,
+              ),
+              const SizedBox(height: 8),
               Text(
                 [
                   if (teachers.isNotEmpty) teachers,
@@ -2396,6 +2402,95 @@ class _ClassDetail extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SchedulerClassReviewBadge extends StatelessWidget {
+  const _SchedulerClassReviewBadge({
+    required this.course,
+    required this.classInfo,
+    required this.controller,
+  });
+
+  final SchedulerCourse course;
+  final SchedulerClass classInfo;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<SchedulerClassReviewInfo>(
+      future: controller.loadClassReviewInfo(course, classInfo),
+      builder: (context, snapshot) {
+        final info =
+            snapshot.data ??
+            const SchedulerClassReviewInfo(rating: 0, reviewCount: 0);
+        final isLoading = snapshot.connectionState != ConnectionState.done;
+        final text = isLoading ? '读取评课中' : info.ratingText;
+        return _SchedulerReviewChip(
+          text: snapshot.hasError ? '暂无评课' : text,
+          info: info,
+          isLoading: isLoading,
+        );
+      },
+    );
+  }
+}
+
+class _SchedulerReviewChip extends StatelessWidget {
+  const _SchedulerReviewChip({
+    required this.text,
+    required this.info,
+    required this.isLoading,
+  });
+
+  final String text;
+  final SchedulerClassReviewInfo info;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = _reviewColor(scheme);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isLoading
+                    ? Icons.hourglass_top_rounded
+                    : Icons.query_stats_rounded,
+                size: 14,
+                color: color,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                text,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _reviewColor(ColorScheme scheme) {
+    if (isLoading || info.reviewCount <= 0) return scheme.onSurfaceVariant;
+    if (info.rating >= 4.0) return scheme.primary;
+    if (info.rating >= 3.0) return const Color(0xFFB45309);
+    return scheme.error;
   }
 }
 

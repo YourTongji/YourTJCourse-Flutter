@@ -276,6 +276,16 @@ class _VisualSchedulerRepository extends SchedulerRepository {
     lastLookupSection = section;
     return const [_timeLookupCourse];
   }
+
+  @override
+  Future<SchedulerClassReviewInfo> getClassReviewInfo({
+    required String courseCode,
+    String? teacherCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) async {
+    return const SchedulerClassReviewInfo(rating: 4.4, reviewCount: 12);
+  }
 }
 
 const _timeLookupCourse = SchedulerCourse(
@@ -307,7 +317,15 @@ const _shareReview = Review(
   courseId: 1,
   semester: '2024-2025-1',
   rating: 5,
-  comment: '课堂节奏清楚，作业量适中，适合打基础。',
+  comment: '''
+# 课程内容
+**课堂节奏清楚**，作业量适中，适合打基础。
+
+- 实验安排比较稳定
+- 期末复习范围明确
+
+> 推荐给想系统补基础的同学。
+''',
   createdAt: '2026-06-07T08:00:00Z',
   likeCount: 3,
   liked: false,

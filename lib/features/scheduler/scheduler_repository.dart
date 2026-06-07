@@ -198,6 +198,32 @@ class SchedulerRepository {
     );
   }
 
+  Future<SchedulerClassReviewInfo> getClassReviewInfo({
+    required String courseCode,
+    String? teacherCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) {
+    return _client.get(
+      '/api/course/by-code/$courseCode',
+      queryParameters: {
+        if (teacherCode != null && teacherCode.isNotEmpty)
+          'teacherCode': teacherCode,
+        if (teacherName != null && teacherName.isNotEmpty)
+          'teacherName': teacherName,
+      },
+      cancelToken: cancelToken,
+      decode: (json) {
+        final map = asJsonMap(json);
+        return SchedulerClassReviewInfo(
+          rating:
+              readDouble(map['review_avg']) ?? readDouble(map['rating']) ?? 0,
+          reviewCount: readInt(map['review_count']) ?? 0,
+        );
+      },
+    );
+  }
+
   Object? _unwrapData(Object? json) {
     if (json is Map && json.containsKey('data')) return json['data'];
     return json;

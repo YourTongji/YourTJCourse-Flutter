@@ -119,7 +119,6 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('关于 YourTJ Course'),
-            subtitle: const Text('同济大学选课社区移动端测试应用'),
             onTap: () => _showAbout(context),
           ),
         ],

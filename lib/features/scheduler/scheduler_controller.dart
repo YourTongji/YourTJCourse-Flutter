@@ -486,6 +486,19 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     return hydrated;
   }
 
+  Future<SchedulerClassReviewInfo> loadClassReviewInfo(
+    SchedulerCourse course,
+    SchedulerClass classInfo,
+  ) {
+    final teacher = classInfo.teachers.firstOrNull;
+    return _repository.getClassReviewInfo(
+      courseCode: course.courseCode,
+      teacherCode: teacher?.teacherCode,
+      teacherName: teacher?.teacherName,
+      cancelToken: _cancelToken,
+    );
+  }
+
   void _replaceCourseInResults(SchedulerCourse course) {
     final current = state.value ?? const SchedulerState();
     List<SchedulerCourse> replace(List<SchedulerCourse> courses) {

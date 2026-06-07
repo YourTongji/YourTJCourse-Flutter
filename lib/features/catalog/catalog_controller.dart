@@ -20,6 +20,12 @@ class CatalogState {
     this.selectedDepartments = const [],
     this.searchText = '',
     this.onlyWithReviews = false,
+    this.courseName = '',
+    this.courseCode = '',
+    this.teacherName = '',
+    this.teacherCode = '',
+    this.campus = '',
+    this.faculty = '',
     this.hasMore = true,
     this.isLoadingMore = false,
     this.totalCount,
@@ -30,9 +36,37 @@ class CatalogState {
   final List<String> selectedDepartments;
   final String searchText;
   final bool onlyWithReviews;
+  final String courseName;
+  final String courseCode;
+  final String teacherName;
+  final String teacherCode;
+  final String campus;
+  final String faculty;
   final bool hasMore;
   final bool isLoadingMore;
   final int? totalCount;
+
+  bool get hasAdvancedFilters {
+    return selectedDepartments.isNotEmpty ||
+        onlyWithReviews ||
+        courseName.trim().isNotEmpty ||
+        courseCode.trim().isNotEmpty ||
+        teacherName.trim().isNotEmpty ||
+        teacherCode.trim().isNotEmpty ||
+        campus.trim().isNotEmpty ||
+        faculty.trim().isNotEmpty;
+  }
+
+  int get activeFilterCount {
+    return selectedDepartments.length +
+        (onlyWithReviews ? 1 : 0) +
+        (courseName.trim().isNotEmpty ? 1 : 0) +
+        (courseCode.trim().isNotEmpty ? 1 : 0) +
+        (teacherName.trim().isNotEmpty ? 1 : 0) +
+        (teacherCode.trim().isNotEmpty ? 1 : 0) +
+        (campus.trim().isNotEmpty ? 1 : 0) +
+        (faculty.trim().isNotEmpty ? 1 : 0);
+  }
 
   CatalogState copyWith({
     List<Course>? courses,
@@ -40,6 +74,12 @@ class CatalogState {
     List<String>? selectedDepartments,
     String? searchText,
     bool? onlyWithReviews,
+    String? courseName,
+    String? courseCode,
+    String? teacherName,
+    String? teacherCode,
+    String? campus,
+    String? faculty,
     bool? hasMore,
     bool? isLoadingMore,
     int? totalCount,
@@ -50,6 +90,12 @@ class CatalogState {
       selectedDepartments: selectedDepartments ?? this.selectedDepartments,
       searchText: searchText ?? this.searchText,
       onlyWithReviews: onlyWithReviews ?? this.onlyWithReviews,
+      courseName: courseName ?? this.courseName,
+      courseCode: courseCode ?? this.courseCode,
+      teacherName: teacherName ?? this.teacherName,
+      teacherCode: teacherCode ?? this.teacherCode,
+      campus: campus ?? this.campus,
+      faculty: faculty ?? this.faculty,
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       totalCount: totalCount ?? this.totalCount,
@@ -114,6 +160,12 @@ class CatalogController extends AsyncNotifier<CatalogState> {
         query: value.searchText,
         departments: value.selectedDepartments,
         onlyWithReviews: value.onlyWithReviews,
+        courseName: value.courseName.trim(),
+        courseCode: value.courseCode.trim(),
+        teacherName: value.teacherName.trim(),
+        teacherCode: value.teacherCode.trim(),
+        campus: value.campus.trim(),
+        faculty: value.faculty.trim(),
         page: nextPage,
         cancelToken: _cancelToken,
       );
@@ -159,11 +211,60 @@ class CatalogController extends AsyncNotifier<CatalogState> {
     unawaited(refresh());
   }
 
+  void applyAdvancedFilters({
+    required List<String> selectedDepartments,
+    required bool onlyWithReviews,
+    required String courseName,
+    required String courseCode,
+    required String teacherName,
+    required String teacherCode,
+    required String campus,
+    required String faculty,
+  }) {
+    final value = state.value ?? const CatalogState();
+    state = AsyncData(
+      value.copyWith(
+        selectedDepartments: selectedDepartments,
+        onlyWithReviews: onlyWithReviews,
+        courseName: courseName.trim(),
+        courseCode: courseCode.trim(),
+        teacherName: teacherName.trim(),
+        teacherCode: teacherCode.trim(),
+        campus: campus.trim(),
+        faculty: faculty.trim(),
+      ),
+    );
+    unawaited(refresh());
+  }
+
+  void resetAdvancedFilters() {
+    final value = state.value ?? const CatalogState();
+    state = AsyncData(
+      value.copyWith(
+        selectedDepartments: const [],
+        onlyWithReviews: false,
+        courseName: '',
+        courseCode: '',
+        teacherName: '',
+        teacherCode: '',
+        campus: '',
+        faculty: '',
+      ),
+    );
+    unawaited(refresh());
+  }
+
   Future<CatalogState> _loadPage(CatalogState base, {required int page}) async {
     final response = await _courseRepository.getCourses(
       query: base.searchText,
       departments: base.selectedDepartments,
       onlyWithReviews: base.onlyWithReviews,
+      courseName: base.courseName.trim(),
+      courseCode: base.courseCode.trim(),
+      teacherName: base.teacherName.trim(),
+      teacherCode: base.teacherCode.trim(),
+      campus: base.campus.trim(),
+      faculty: base.faculty.trim(),
       page: page,
       includeTotal: true,
       cancelToken: _cancelToken,
