@@ -82,19 +82,23 @@ jobs:
           find "$OHOS_BASE_SDK_HOME" -maxdepth 2 -type d | sort | head -40
           find "$HMOS_SDK_HOME" -maxdepth 3 \( -type f -o -type l \) | sort
 
-      # Step A: Use standard Flutter SDK for pub get (Dart 3.12+ resolves all deps)
+      # Step A: Use standard Flutter SDK for pub get with OHOS-specific overrides.
+      # The OHOS Flutter SDK uses Dart 3.11.1, while lkcn_ui currently needs
+      # a newer pub solver. Resolve once with standard Flutter, but keep
+      # platform implementations within Dart 3.11-compatible versions.
       - name: Set up standard Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Create env & resolve deps (standard SDK)
+      - name: Create env & resolve OHOS deps (standard SDK)
         run: |
           cat > .env <<'EOF'
           API_BASE_URL=${{ secrets.API_BASE_URL || 'https://jcourse.yourtj.de' }}
           CREDIT_API_BASE_URL=${{ secrets.CREDIT_API_BASE_URL || 'https://core.credit.yourtj.de' }}
           EOF
+          cat pubspec.ohos.yaml >> pubspec.yaml
           flutter pub get
 
       # Step B: Switch to OHOS Flutter SDK for HAP build

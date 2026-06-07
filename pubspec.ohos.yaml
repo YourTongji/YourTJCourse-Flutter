@@ -2,10 +2,12 @@
 # 在 OHOS Flutter SDK 环境下使用此配置替换主 pubspec.yaml
 # 用法: cp pubspec.ohos.yaml pubspec.yaml && flutter pub get
 
-# OHOS 平台插件覆盖（flutter_flutter 3.35.x / Dart 3.9.x 环境）
-# 降低 share_plus 版本以兼容 Dart 3.9
-# 添加 OHOS 平台插件实现
+# OHOS 平台插件覆盖（flutter_flutter 3.41.x / Dart 3.11.x 环境）
+# 保持主业务依赖不变，仅压低会被标准 Flutter 解析到 Dart 3.12 的平台实现包。
 dependency_overrides:
-  share_plus: ^10.0.0
-  flutter_secure_storage_ohos: ^1.0.0
+  share_plus: 12.0.1
+  shared_preferences_android: 2.4.18
+  url_launcher_android: 6.3.24
+  path_provider_foundation: 2.4.2
+  objective_c: 8.0.0
   share_plus_harmonyos: ^0.0.1

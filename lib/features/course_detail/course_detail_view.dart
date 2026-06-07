@@ -2533,11 +2533,10 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
         '${directory.path}/${_shareFileName(widget.course, widget.review)}',
       );
       await file.writeAsBytes(bytes, flush: true);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path, mimeType: 'image/png')],
-          text: '来自 YourTJ 选课社区的课程点评',
-        ),
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png')],
+        text: '来自 YourTJ 选课社区的课程点评',
       );
     } catch (error) {
       if (!mounted) return;

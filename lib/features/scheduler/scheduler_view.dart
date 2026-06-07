@@ -865,12 +865,11 @@ class _TimetableSection extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final file = await _writeScheduleCsv(state.selected);
     if (!context.mounted) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path, mimeType: 'text/csv')],
-        subject: '同济排课助手-课程表',
-        text: '同济排课助手-课程表.csv',
-      ),
+    // ignore: deprecated_member_use
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/csv')],
+      subject: '同济排课助手-课程表',
+      text: '同济排课助手-课程表.csv',
     );
     if (!context.mounted) return;
     messenger.showSnackBar(const SnackBar(content: Text('已生成课表 CSV')));
