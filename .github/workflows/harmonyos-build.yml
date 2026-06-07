@@ -58,6 +58,13 @@ jobs:
           cache: true
           components: "all"
 
+      - name: Export OHOS SDK variables
+        run: |
+          echo "HOS_SDK_HOME=$OHOS_BASE_SDK_HOME" >> $GITHUB_ENV
+          echo "OHOS_SDK_HOME=$OHOS_BASE_SDK_HOME" >> $GITHUB_ENV
+          echo "OpenHarmony SDK root: $OHOS_BASE_SDK_HOME"
+          find "$OHOS_BASE_SDK_HOME" -maxdepth 2 -type d | sort | head -40
+
       # Step A: Use standard Flutter SDK for pub get (Dart 3.12+ resolves all deps)
       - name: Set up standard Flutter
         uses: subosito/flutter-action@v2
@@ -85,6 +92,10 @@ jobs:
       - name: Fix package_config.json references
         run: |
           flutter --version
+          echo "HOS_SDK_HOME=$HOS_SDK_HOME"
+          echo "OHOS_BASE_SDK_HOME=$OHOS_BASE_SDK_HOME"
+          echo "OHOS_NDK_HOME=$OHOS_NDK_HOME"
+          echo "OHOS_SDK_NATIVE=$OHOS_SDK_NATIVE"
           # Fix package_config.json to point to OHOS Flutter SDK
           STD_FLUTTER=$(echo /opt/hostedtoolcache/flutter/stable-*/flutter)
           echo "Replacing $STD_FLUTTER references with /opt/flutter_ohos"
