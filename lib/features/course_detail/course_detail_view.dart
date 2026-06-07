@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -385,7 +385,7 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
                       child: Text(
                         _avatarType == _ReviewerAvatarType.qq
                             ? '我们只保存头像链接，不会公开你的 QQ 号'
-                            : '随机头像按昵称生成，和网页版保持一致',
+                            : '随机头像按昵称生成',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -1491,6 +1491,556 @@ class _BeamAvatarData {
   }
 }
 
+Future<ui.Image?> _loadShareAvatarImage(Review review) async {
+  final avatarUrl = review.reviewerAvatar?.trim() ?? '';
+  if (!avatarUrl.startsWith('http')) return null;
+
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+  try {
+    final uri = Uri.parse(avatarUrl);
+    final request = await client.getUrl(uri);
+    final response = await request.close();
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
+    final bytes = await consolidateHttpClientResponseBytes(response);
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    codec.dispose();
+    return frame.image;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+class _ReviewShareImagePainter {
+  const _ReviewShareImagePainter({
+    required this.course,
+    required this.review,
+    required this.avatar,
+  });
+
+  static const width = 640.0;
+  static const _padding = 28.0;
+  static const _contentWidth = width - _padding * 2;
+
+  final CourseDetail course;
+  final Review review;
+  final ui.Image? avatar;
+
+  Size measure() {
+    final title = _measureText(
+      course.name,
+      const TextStyle(
+        color: Color(0xFF0F172A),
+        fontSize: 27,
+        height: 1.16,
+        fontWeight: FontWeight.w900,
+      ),
+      maxWidth: 380,
+      maxLines: 3,
+    );
+    final comment = _measureText(
+      review.comment,
+      const TextStyle(
+        color: Color(0xFF334155),
+        fontSize: 16,
+        height: 1.72,
+        fontWeight: FontWeight.w500,
+      ),
+      maxWidth: _contentWidth - 44,
+    );
+    final chipsHeight = _measurePills([
+      '教师：${course.teacherName.isEmpty ? '未知教师' : course.teacherName}',
+      '学期：${review.semester}',
+      '编号：${review.sqid}',
+    ], _contentWidth).height;
+
+    final headerHeight = math.max(116, 13 + 12 + title.height + 12 + 31);
+    final height =
+        _padding +
+        headerHeight +
+        26 +
+        58 +
+        18 +
+        chipsHeight +
+        22 +
+        comment.height +
+        44 +
+        22 +
+        18 +
+        _padding;
+    return Size(width, height.ceilToDouble());
+  }
+
+  void paint(Canvas canvas, Size size) {
+    final background = Paint()..color = Colors.white;
+    final border = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(24)),
+      background,
+    );
+
+    var y = _padding;
+    final titlePainter = _layoutText(
+      course.name,
+      const TextStyle(
+        color: Color(0xFF0F172A),
+        fontSize: 27,
+        height: 1.16,
+        fontWeight: FontWeight.w900,
+      ),
+      maxWidth: 380,
+      maxLines: 3,
+    );
+
+    _paintText(
+      canvas,
+      'YOURTJ 选课社区',
+      const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.8,
+      ),
+      Offset(_padding, y),
+      maxWidth: 380,
+    );
+    y += 25;
+    titlePainter.paint(canvas, Offset(_padding, y));
+    y += titlePainter.height + 12;
+    _paintPill(
+      canvas,
+      course.code,
+      Offset(_padding, y),
+      foreground: Colors.white,
+      background: const Color(0xFF0F172A),
+    );
+
+    _paintRatingBox(
+      canvas,
+      Rect.fromLTWH(width - _padding - 150, _padding, 150, 108),
+      border,
+    );
+    y = math.max(_padding + 116, y + 31);
+
+    y += 26;
+    _paintAvatar(canvas, Rect.fromLTWH(_padding, y, 58, 58));
+    final reviewerName = (review.reviewerName?.trim().isNotEmpty ?? false)
+        ? review.reviewerName!.trim()
+        : '匿名用户';
+    _paintText(
+      canvas,
+      reviewerName,
+      const TextStyle(
+        color: Color(0xFF0F172A),
+        fontSize: 20,
+        fontWeight: FontWeight.w900,
+      ),
+      Offset(_padding + 72, y + 5),
+      maxWidth: 330,
+    );
+    _paintText(
+      canvas,
+      '${review.semester} · ${_formatReviewDate(review.createdAt)}',
+      const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      Offset(_padding + 72, y + 34),
+      maxWidth: 330,
+    );
+    _paintPill(
+      canvas,
+      '${review.rating.toStringAsFixed(1)} / 5',
+      Offset(width - _padding - 80, y + 13),
+      foreground: const Color(0xFFD97706),
+      background: const Color(0xFFFFFBEB),
+    );
+
+    y += 76;
+    y = _paintPillWrap(
+      canvas,
+      [
+        _ShareImagePill(
+          text:
+              '教师：${course.teacherName.isEmpty ? '未知教师' : course.teacherName}',
+          foreground: const Color(0xFF0E7490),
+          background: const Color(0xFFECFEFF),
+        ),
+        _ShareImagePill(
+          text: '学期：${review.semester}',
+          foreground: const Color(0xFF4338CA),
+          background: const Color(0xFFEEF2FF),
+        ),
+        _ShareImagePill(
+          text: '编号：${review.sqid}',
+          foreground: const Color(0xFF047857),
+          background: const Color(0xFFECFDF5),
+        ),
+      ],
+      Offset(_padding, y),
+      maxWidth: _contentWidth,
+    );
+
+    y += 22;
+    final commentPainter = _layoutText(
+      review.comment,
+      const TextStyle(
+        color: Color(0xFF334155),
+        fontSize: 16,
+        height: 1.72,
+        fontWeight: FontWeight.w500,
+      ),
+      maxWidth: _contentWidth - 44,
+    );
+    final commentRect = Rect.fromLTWH(
+      _padding,
+      y,
+      _contentWidth,
+      commentPainter.height + 44,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(commentRect, const Radius.circular(22)),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(commentRect, const Radius.circular(22)),
+      Paint()
+        ..color = const Color(0xFFBAE6FD)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    commentPainter.paint(canvas, Offset(_padding + 22, y + 22));
+    y += commentRect.height + 22;
+
+    _paintText(
+      canvas,
+      '内容来自 YOURTJ 选课社区',
+      const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      Offset(_padding, y),
+      maxWidth: 300,
+    );
+    _paintText(
+      canvas,
+      'xk.yourtj.de',
+      const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      Offset(width - _padding - 82, y),
+      maxWidth: 90,
+    );
+  }
+
+  void _paintRatingBox(Canvas canvas, Rect rect, Paint border) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(22)),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(22)),
+      border,
+    );
+    _paintText(
+      canvas,
+      '课程评分',
+      const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+      Offset(rect.right - 82, rect.top + 17),
+      maxWidth: 80,
+      textAlign: TextAlign.right,
+    );
+    _paintText(
+      canvas,
+      course.rating > 0
+          ? '${course.rating.toStringAsFixed(1)} / 5.0'
+          : '- / 5.0',
+      const TextStyle(
+        color: Color(0xFFF59E0B),
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
+      ),
+      Offset(rect.right - 111, rect.top + 40),
+      maxWidth: 110,
+      textAlign: TextAlign.right,
+    );
+    _paintText(
+      canvas,
+      '${course.reviewCount} 条评价',
+      const TextStyle(
+        color: Color(0xFF334155),
+        fontSize: 16,
+        fontWeight: FontWeight.w900,
+      ),
+      Offset(rect.right - 100, rect.top + 76),
+      maxWidth: 98,
+      textAlign: TextAlign.right,
+    );
+  }
+
+  void _paintAvatar(Canvas canvas, Rect rect) {
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(rect, const Radius.circular(14)));
+    if (avatar != null) {
+      paintImage(canvas: canvas, rect: rect, image: avatar!, fit: BoxFit.cover);
+    } else {
+      final seed = (review.reviewerName?.trim().isNotEmpty ?? false)
+          ? review.reviewerName!.trim()
+          : '评论长图-${review.id}';
+      canvas.translate(rect.left, rect.top);
+      _paintBeamAvatar(canvas, rect.size, seed);
+    }
+    canvas.restore();
+  }
+
+  static void _paintBeamAvatar(Canvas canvas, Size size, String seed) {
+    const colors = _BeamAvatarPainter._colors;
+    final data = _BeamAvatarData(seed: seed, colors: colors);
+    final scale = size.shortestSide / _BeamAvatarData.canvasSize;
+    final dx = (size.width - size.shortestSide) / 2;
+    final dy = (size.height - size.shortestSide) / 2;
+
+    canvas.save();
+    canvas.translate(dx, dy);
+    canvas.scale(scale);
+    canvas.clipPath(
+      Path()..addOval(
+        const Rect.fromLTWH(
+          0,
+          0,
+          _BeamAvatarData.canvasSize,
+          _BeamAvatarData.canvasSize,
+        ),
+      ),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(
+        0,
+        0,
+        _BeamAvatarData.canvasSize,
+        _BeamAvatarData.canvasSize,
+      ),
+      Paint()..color = data.backgroundColor,
+    );
+    canvas.save();
+    canvas.translate(data.wrapperTranslateX, data.wrapperTranslateY);
+    canvas.translate(18, 18);
+    canvas.rotate(data.wrapperRotate * math.pi / 180);
+    canvas.translate(-18, -18);
+    canvas.scale(data.wrapperScale);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(
+          0,
+          0,
+          _BeamAvatarData.canvasSize,
+          _BeamAvatarData.canvasSize,
+        ),
+        Radius.circular(data.isCircle ? _BeamAvatarData.canvasSize : 6),
+      ),
+      Paint()..color = data.wrapperColor,
+    );
+    canvas.restore();
+
+    canvas.save();
+    canvas.translate(data.faceTranslateX, data.faceTranslateY);
+    canvas.translate(18, 18);
+    canvas.rotate(data.faceRotate * math.pi / 180);
+    canvas.translate(-18, -18);
+    final facePaint = Paint()..color = data.faceColor;
+    final mouthY = 19.0 + data.mouthSpread;
+    if (data.isMouthOpen) {
+      final path = Path()
+        ..moveTo(15, mouthY)
+        ..cubicTo(17, mouthY + 1, 19, mouthY + 1, 21, mouthY);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = data.faceColor
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 1,
+      );
+    } else {
+      canvas.drawArc(
+        Rect.fromLTWH(13, mouthY - 0.75, 10, 1.5),
+        0,
+        math.pi,
+        false,
+        facePaint,
+      );
+    }
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(14 - data.eyeSpread, 14, 1.5, 2),
+        const Radius.circular(1),
+      ),
+      facePaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(20 + data.eyeSpread, 14, 1.5, 2),
+        const Radius.circular(1),
+      ),
+      facePaint,
+    );
+    canvas.restore();
+    canvas.restore();
+  }
+
+  static Size _measurePills(List<String> labels, double maxWidth) {
+    var x = 0.0;
+    var height = 31.0;
+    var rows = 1;
+    for (final label in labels) {
+      final size = _measureText(
+        label,
+        const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+        maxWidth: maxWidth,
+      );
+      final pillWidth = math.min(size.width + 26, maxWidth);
+      if (x > 0 && x + pillWidth > maxWidth) {
+        rows++;
+        x = 0;
+      }
+      x += pillWidth + 10;
+    }
+    height = rows * 31 + (rows - 1) * 10;
+    return Size(maxWidth, height);
+  }
+
+  static double _paintPillWrap(
+    Canvas canvas,
+    List<_ShareImagePill> pills,
+    Offset offset, {
+    required double maxWidth,
+  }) {
+    var x = offset.dx;
+    var y = offset.dy;
+    for (final pill in pills) {
+      final size = _measureText(
+        pill.text,
+        const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+        maxWidth: maxWidth,
+      );
+      final pillWidth = math.min(size.width + 26, maxWidth);
+      if (x > offset.dx && x + pillWidth > offset.dx + maxWidth) {
+        x = offset.dx;
+        y += 41;
+      }
+      _paintPill(
+        canvas,
+        pill.text,
+        Offset(x, y),
+        foreground: pill.foreground,
+        background: pill.background,
+        maxWidth: pillWidth - 26,
+      );
+      x += pillWidth + 10;
+    }
+    return y + 31;
+  }
+
+  static void _paintPill(
+    Canvas canvas,
+    String text,
+    Offset offset, {
+    required Color foreground,
+    required Color background,
+    double maxWidth = 280,
+  }) {
+    final painter = _layoutText(
+      text,
+      TextStyle(color: foreground, fontSize: 13, fontWeight: FontWeight.w900),
+      maxWidth: maxWidth,
+      maxLines: 1,
+    );
+    final rect = Rect.fromLTWH(offset.dx, offset.dy, painter.width + 26, 31);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(999)),
+      Paint()..color = background,
+    );
+    painter.paint(canvas, Offset(offset.dx + 13, offset.dy + 7));
+  }
+
+  static void _paintText(
+    Canvas canvas,
+    String text,
+    TextStyle style,
+    Offset offset, {
+    required double maxWidth,
+    int? maxLines,
+    TextAlign textAlign = TextAlign.left,
+  }) {
+    final painter = _layoutText(
+      text,
+      style,
+      maxWidth: maxWidth,
+      maxLines: maxLines,
+      textAlign: textAlign,
+    );
+    painter.paint(canvas, offset);
+  }
+
+  static Size _measureText(
+    String text,
+    TextStyle style, {
+    required double maxWidth,
+    int? maxLines,
+  }) {
+    final painter = _layoutText(
+      text,
+      style,
+      maxWidth: maxWidth,
+      maxLines: maxLines,
+    );
+    return painter.size;
+  }
+
+  static TextPainter _layoutText(
+    String text,
+    TextStyle style, {
+    required double maxWidth,
+    int? maxLines,
+    TextAlign textAlign = TextAlign.left,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text.isEmpty ? ' ' : text, style: style),
+      maxLines: maxLines,
+      ellipsis: maxLines == null ? null : '...',
+      textAlign: textAlign,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+    return painter;
+  }
+}
+
+class _ShareImagePill {
+  const _ShareImagePill({
+    required this.text,
+    required this.foreground,
+    required this.background,
+  });
+
+  final String text;
+  final Color foreground;
+  final Color background;
+}
+
 Future<void> showReviewShareDialog(
   BuildContext context, {
   required CourseDetail course,
@@ -1516,7 +2066,6 @@ class _ReviewShareDialog extends StatefulWidget {
 class _ReviewShareDialogState extends State<_ReviewShareDialog> {
   static const _platform = MethodChannel('de.yourtj.course.flutter/updater');
 
-  final _key = GlobalKey();
   Uint8List? _pngBytes;
   String? _message;
   var _saving = false;
@@ -1542,17 +2091,20 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
           children: [
             if (png == null)
               SizedBox(
-                height: 520,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: RepaintBoundary(
-                      key: _key,
-                      child: ReviewShareCard(
-                        course: widget.course,
-                        review: widget.review,
+                height: 420,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 14),
+                      Text(
+                        '正在生成分享图',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               )
@@ -1560,7 +2112,7 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 520),
                 child: InteractiveViewer(
-                  minScale: 0.6,
+                  minScale: 0.7,
                   maxScale: 3,
                   child: Image.memory(png, fit: BoxFit.contain),
                 ),
@@ -1610,16 +2162,7 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
 
   Future<void> _generatePreview() async {
     try {
-      final avatarUrl = widget.review.reviewerAvatar?.trim() ?? '';
-      if (avatarUrl.startsWith('http')) {
-        try {
-          await precacheImage(NetworkImage(avatarUrl), context);
-        } catch (_) {
-          // 和网页版一致：外部头像取不到时继续用随机头像兜底。
-        }
-      }
-      await _waitForNextFrame();
-      final bytes = await renderReviewShareImage(_key);
+      final bytes = await renderReviewShareImage(widget.course, widget.review);
       if (!mounted) return;
       setState(() => _pngBytes = bytes);
     } catch (error) {
@@ -1653,7 +2196,10 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
   Future<void> _shareImage() async {
     final bytes = _pngBytes;
     if (bytes == null) return;
-    setState(() => _sharing = true);
+    setState(() {
+      _sharing = true;
+      _message = null;
+    });
     try {
       final directory = await getTemporaryDirectory();
       final file = File(
@@ -1666,6 +2212,9 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
           text: '来自 YourTJ 选课社区的课程点评',
         ),
       );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _message = '分享失败：$error');
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -1673,30 +2222,36 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
 }
 
 Future<Uint8List> renderReviewShareImage(
-  GlobalKey key, {
+  CourseDetail course,
+  Review review, {
   double pixelRatio = 2.5,
 }) async {
-  RenderRepaintBoundary? boundary;
-  for (var i = 0; i < 4; i++) {
-    boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary != null && !boundary.debugNeedsPaint) break;
-    await _waitForNextFrame();
-  }
-  if (boundary == null) throw StateError('分享图尚未渲染');
-  if (boundary.debugNeedsPaint) {
-    throw StateError('分享图仍在绘制，请稍后重试');
-  }
-  final image = await boundary.toImage(pixelRatio: pixelRatio);
+  final avatar = await _loadShareAvatarImage(review);
+  final painter = _ReviewShareImagePainter(
+    course: course,
+    review: review,
+    avatar: avatar,
+  );
+  final recorder = ui.PictureRecorder();
+  final logicalSize = painter.measure();
+  final canvas = Canvas(
+    recorder,
+    Offset.zero &
+        Size(logicalSize.width * pixelRatio, logicalSize.height * pixelRatio),
+  )..scale(pixelRatio);
+  painter.paint(canvas, logicalSize);
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    (logicalSize.width * pixelRatio).ceil(),
+    (logicalSize.height * pixelRatio).ceil(),
+  );
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  avatar?.dispose();
   final data = bytes?.buffer.asUint8List();
   if (data == null) throw StateError('分享图生成失败');
   return data;
-}
-
-Future<void> _waitForNextFrame() {
-  final binding = WidgetsBinding.instance;
-  binding.scheduleFrame();
-  return binding.endOfFrame;
 }
 
 String _shareFileName(CourseDetail course, Review review) {

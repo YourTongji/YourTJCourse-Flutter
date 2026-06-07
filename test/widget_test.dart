@@ -189,6 +189,19 @@ void main() {
     expect(find.text('内容来自 YOURTJ 选课社区'), findsOneWidget);
     expect(find.text('xk.yourtj.de'), findsOneWidget);
   });
+
+  testWidgets('generates review share image without widget screenshot', (
+    tester,
+  ) async {
+    final bytes = await tester.runAsync(
+      () => renderReviewShareImage(_shareCourse, _shareReview, pixelRatio: 1),
+    );
+
+    expect(bytes, isNotNull);
+    final png = bytes!;
+    expect(png.length, greaterThan(1024));
+    expect(png.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+  });
 }
 
 class _NoAnnouncementController extends AnnouncementController {
