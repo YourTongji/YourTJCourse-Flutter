@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yourtjcourse_flutter/core/network/api_client.dart';
+import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
+import 'package:yourtjcourse_flutter/domain/models/review.dart';
 import 'package:yourtjcourse_flutter/features/announcements/announcement_controller.dart';
+import 'package:yourtjcourse_flutter/features/course_detail/course_detail_view.dart';
 import 'package:yourtjcourse_flutter/main.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
@@ -162,6 +165,30 @@ void main() {
       expect(rect.bottom, lessThanOrEqualTo(568));
     }
   });
+
+  testWidgets('renders review share card with web aligned content', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ReviewShareCard(course: _shareCourse, review: _shareReview),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('YOURTJ 选课社区'), findsOneWidget);
+    expect(find.text('程序设计基础'), findsOneWidget);
+    expect(find.text('内容来自 YOURTJ 选课社区'), findsOneWidget);
+    expect(find.text('xk.yourtj.de'), findsOneWidget);
+  });
 }
 
 class _NoAnnouncementController extends AnnouncementController {
@@ -246,4 +273,30 @@ const _timeLookupCourse = SchedulerCourse(
   courseNature: ['通识选修'],
   campus: ['四平路'],
   classes: [],
+);
+
+const _shareCourse = CourseDetail(
+  id: 1,
+  code: 'CS1001',
+  name: '程序设计基础',
+  rating: 4.6,
+  reviewCount: 12,
+  teacherName: '张老师',
+  department: '电子与信息工程学院',
+  credit: 3,
+  semesters: ['2024-2025-1'],
+  reviews: [_shareReview],
+);
+
+const _shareReview = Review(
+  id: 42,
+  sqid: 'rv42',
+  courseId: 1,
+  semester: '2024-2025-1',
+  rating: 5,
+  comment: '课堂节奏清楚，作业量适中，适合打基础。',
+  createdAt: '2026-06-07T08:00:00Z',
+  likeCount: 3,
+  liked: false,
+  reviewerName: '同济同学',
 );

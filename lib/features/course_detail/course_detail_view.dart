@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -1275,17 +1276,7 @@ class ReviewAvatar extends StatelessWidget {
       ),
       child: CustomPaint(
         painter: _BeamAvatarPainter(seed: seed),
-        child: Center(
-          child: Text(
-            (review.reviewerName?.isNotEmpty ?? false)
-                ? review.reviewerName!.characters.first
-                : '',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
+        child: const SizedBox.expand(),
       ),
     );
     return ClipRRect(
@@ -1319,29 +1310,184 @@ class _BeamAvatarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final hash = seed.codeUnits.fold<int>(
-      0,
-      (value, unit) => (value * 31 + unit) & 0x7fffffff,
-    );
-    final basePaint = Paint()..color = _colors[hash % _colors.length];
-    canvas.drawRect(Offset.zero & size, basePaint);
+    final data = _BeamAvatarData(seed: seed, colors: _colors);
+    final scale = size.shortestSide / _BeamAvatarData.canvasSize;
+    final dx = (size.width - size.shortestSide) / 2;
+    final dy = (size.height - size.shortestSide) / 2;
 
-    for (var i = 0; i < 7; i++) {
-      final color = _colors[(hash + i * 7) % _colors.length];
-      final paint = Paint()
-        ..color = color.withValues(alpha: i.isEven ? 0.92 : 0.72);
-      final radius =
-          size.shortestSide * (0.18 + ((hash >> (i + 1)) % 18) / 100);
-      final dx = ((hash >> (i * 3)) % 100) / 100 * size.width;
-      final dy = ((hash >> (i * 4 + 1)) % 100) / 100 * size.height;
-      canvas.drawCircle(Offset(dx, dy), radius, paint);
-      canvas.drawCircle(Offset(size.width - dx, dy), radius * 0.82, paint);
+    canvas.save();
+    canvas.translate(dx, dy);
+    canvas.scale(scale);
+    canvas.clipPath(
+      Path()..addOval(
+        const Rect.fromLTWH(
+          0,
+          0,
+          _BeamAvatarData.canvasSize,
+          _BeamAvatarData.canvasSize,
+        ),
+      ),
+    );
+
+    canvas.drawRect(
+      const Rect.fromLTWH(
+        0,
+        0,
+        _BeamAvatarData.canvasSize,
+        _BeamAvatarData.canvasSize,
+      ),
+      Paint()..color = data.backgroundColor,
+    );
+
+    canvas.save();
+    canvas.translate(data.wrapperTranslateX, data.wrapperTranslateY);
+    canvas.translate(18, 18);
+    canvas.rotate(data.wrapperRotate * math.pi / 180);
+    canvas.translate(-18, -18);
+    canvas.scale(data.wrapperScale);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(
+          0,
+          0,
+          _BeamAvatarData.canvasSize,
+          _BeamAvatarData.canvasSize,
+        ),
+        Radius.circular(data.isCircle ? _BeamAvatarData.canvasSize : 6),
+      ),
+      Paint()..color = data.wrapperColor,
+    );
+    canvas.restore();
+
+    canvas.save();
+    canvas.translate(data.faceTranslateX, data.faceTranslateY);
+    canvas.translate(18, 18);
+    canvas.rotate(data.faceRotate * math.pi / 180);
+    canvas.translate(-18, -18);
+
+    final facePaint = Paint()..color = data.faceColor;
+    final mouthY = 19.0 + data.mouthSpread;
+    if (data.isMouthOpen) {
+      final path = Path()
+        ..moveTo(15, mouthY)
+        ..cubicTo(17, mouthY + 1, 19, mouthY + 1, 21, mouthY);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = data.faceColor
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 1,
+      );
+    } else {
+      canvas.drawArc(
+        Rect.fromLTWH(13, mouthY - 0.75, 10, 1.5),
+        0,
+        math.pi,
+        false,
+        facePaint,
+      );
     }
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(14 - data.eyeSpread, 14, 1.5, 2),
+        const Radius.circular(1),
+      ),
+      facePaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(20 + data.eyeSpread, 14, 1.5, 2),
+        const Radius.circular(1),
+      ),
+      facePaint,
+    );
+    canvas.restore();
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _BeamAvatarPainter oldDelegate) {
     return oldDelegate.seed != seed;
+  }
+}
+
+class _BeamAvatarData {
+  _BeamAvatarData({required String seed, required List<Color> colors}) {
+    final hash = _hashCode(seed.isEmpty ? '匿名用户' : seed);
+    final length = colors.length;
+    wrapperColor = _colorAt(hash, colors, length);
+    faceColor = _readableFaceColor(wrapperColor);
+    backgroundColor = _colorAt(hash + 13, colors, length);
+
+    final tx = _getUnit(hash, 10, 1);
+    wrapperTranslateX = tx < 5 ? tx + canvasSize / 9 : tx.toDouble();
+    final ty = _getUnit(hash, 10, 2);
+    wrapperTranslateY = ty < 5 ? ty + canvasSize / 9 : ty.toDouble();
+
+    wrapperRotate = _getUnit(hash, 360).toDouble();
+    wrapperScale = 1 + _getUnit(hash, canvasSize ~/ 12) / 10;
+    isMouthOpen = _bool(hash, 2);
+    isCircle = _bool(hash, 1);
+    eyeSpread = _getUnit(hash, 5).toDouble();
+    mouthSpread = _getUnit(hash, 3).toDouble();
+    faceRotate = _getUnit(hash, 10, 3).toDouble();
+    faceTranslateX = wrapperTranslateX > canvasSize / 6
+        ? wrapperTranslateX / 2
+        : _getUnit(hash, 8, 1).toDouble();
+    faceTranslateY = wrapperTranslateY > canvasSize / 6
+        ? wrapperTranslateY / 2
+        : _getUnit(hash, 7, 2).toDouble();
+  }
+
+  static const canvasSize = 36.0;
+
+  late final Color wrapperColor;
+  late final Color faceColor;
+  late final Color backgroundColor;
+  late final double wrapperTranslateX;
+  late final double wrapperTranslateY;
+  late final double wrapperRotate;
+  late final double wrapperScale;
+  late final bool isMouthOpen;
+  late final bool isCircle;
+  late final double eyeSpread;
+  late final double mouthSpread;
+  late final double faceRotate;
+  late final double faceTranslateX;
+  late final double faceTranslateY;
+
+  static int _hashCode(String name) {
+    var hash = 0;
+    for (final unit in name.codeUnits) {
+      hash = ((hash << 5) - hash + unit).toSigned(32);
+    }
+    return hash.abs();
+  }
+
+  static int _digit(int number, int n) {
+    return (number / math.pow(10, n)).floor() % 10;
+  }
+
+  static bool _bool(int number, int n) {
+    return _digit(number, n).isEven;
+  }
+
+  static int _getUnit(int number, int range, [int? index]) {
+    final value = number % range;
+    return index != null && _digit(number, index).isEven ? -value : value;
+  }
+
+  static Color _colorAt(int number, List<Color> colors, int length) {
+    return colors[number % length];
+  }
+
+  static Color _readableFaceColor(Color color) {
+    final red = (color.r * 255).round();
+    final green = (color.g * 255).round();
+    final blue = (color.b * 255).round();
+    final luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+    return luminance >= 128 ? Colors.black : Colors.white;
   }
 }
 
@@ -1395,9 +1541,20 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
           clipBehavior: Clip.none,
           children: [
             if (png == null)
-              const SizedBox(
-                height: 260,
-                child: Center(child: CircularProgressIndicator()),
+              SizedBox(
+                height: 520,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: RepaintBoundary(
+                      key: _key,
+                      child: ReviewShareCard(
+                        course: widget.course,
+                        review: widget.review,
+                      ),
+                    ),
+                  ),
+                ),
               )
             else
               ConstrainedBox(
@@ -1408,17 +1565,6 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
                   child: Image.memory(png, fit: BoxFit.contain),
                 ),
               ),
-            Positioned(
-              left: -1200,
-              top: 0,
-              child: RepaintBoundary(
-                key: _key,
-                child: ReviewShareCard(
-                  course: widget.course,
-                  review: widget.review,
-                ),
-              ),
-            ),
             if (_message != null)
               Positioned(
                 left: 0,
@@ -1466,8 +1612,13 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
     try {
       final avatarUrl = widget.review.reviewerAvatar?.trim() ?? '';
       if (avatarUrl.startsWith('http')) {
-        await precacheImage(NetworkImage(avatarUrl), context);
+        try {
+          await precacheImage(NetworkImage(avatarUrl), context);
+        } catch (_) {
+          // 和网页版一致：外部头像取不到时继续用随机头像兜底。
+        }
       }
+      await _waitForNextFrame();
       final bytes = await renderReviewShareImage(_key);
       if (!mounted) return;
       setState(() => _pngBytes = bytes);
@@ -1521,15 +1672,31 @@ class _ReviewShareDialogState extends State<_ReviewShareDialog> {
   }
 }
 
-Future<Uint8List> renderReviewShareImage(GlobalKey key) async {
-  final boundary =
-      key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+Future<Uint8List> renderReviewShareImage(
+  GlobalKey key, {
+  double pixelRatio = 2.5,
+}) async {
+  RenderRepaintBoundary? boundary;
+  for (var i = 0; i < 4; i++) {
+    boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary != null && !boundary.debugNeedsPaint) break;
+    await _waitForNextFrame();
+  }
   if (boundary == null) throw StateError('分享图尚未渲染');
-  final image = await boundary.toImage(pixelRatio: 3);
+  if (boundary.debugNeedsPaint) {
+    throw StateError('分享图仍在绘制，请稍后重试');
+  }
+  final image = await boundary.toImage(pixelRatio: pixelRatio);
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   final data = bytes?.buffer.asUint8List();
   if (data == null) throw StateError('分享图生成失败');
   return data;
+}
+
+Future<void> _waitForNextFrame() {
+  final binding = WidgetsBinding.instance;
+  binding.scheduleFrame();
+  return binding.endOfFrame;
 }
 
 String _shareFileName(CourseDetail course, Review review) {
