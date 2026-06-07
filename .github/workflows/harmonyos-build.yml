@@ -29,7 +29,9 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_OHOS_VERSION: 3.35.8-ohos-0.0.3
+  # Finn-Technologies/flutter 3.41.9 基于较新 Flutter，含 Dart 3.10+
+  FLUTTER_OHOS_REPO: https://github.com/Finn-Technologies/flutter.git
+  FLUTTER_OHOS_VERSION: main
 
 jobs:
   # --- Job 1: Standard Flutter CI (standard SDK: analyze + test) ---
@@ -91,10 +93,10 @@ jobs:
       - name: Install OHOS Flutter SDK
         run: |
           git clone --depth 1 --branch ${{ env.FLUTTER_OHOS_VERSION }} \
-            https://gitcode.com/openharmony-tpc/flutter_flutter.git \
+            ${{ env.FLUTTER_OHOS_REPO }} \
             /opt/flutter_ohos 2>/dev/null || \
           git clone --depth 1 \
-            https://gitcode.com/openharmony-tpc/flutter_flutter.git \
+            ${{ env.FLUTTER_OHOS_REPO }} \
             /opt/flutter_ohos
           echo "/opt/flutter_ohos/bin" >> $GITHUB_PATH
 
