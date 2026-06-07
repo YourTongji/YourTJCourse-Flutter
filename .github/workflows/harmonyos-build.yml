@@ -125,6 +125,55 @@ jobs:
           sed -i "s|$STD_FLUTTER|/opt/flutter_ohos|g" .dart_tool/package_config.json
           cat .dart_tool/package_config.json | grep flutter | head -3
 
+      - name: Prepare HarmonyOS build commands
+        run: |
+          echo "registry=https://repo.harmonyos.com/npm/" > .npmrc
+          mkdir -p "$RUNNER_TEMP/harmonyos-bin"
+
+          cat > "$RUNNER_TEMP/harmonyos-bin/ohpm" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          if [ "${1:-}" = "--version" ]; then
+            echo "0.0.0-ci-shim"
+            exit 0
+          fi
+
+          if [ "${1:-}" != "install" ] || [ "${2:-}" != "--all" ]; then
+            echo "Unsupported ohpm command: $*" >&2
+            exit 2
+          fi
+
+          echo "ohpm install --all is provided by the CI shim."
+          echo "working directory: $PWD"
+          find . -maxdepth 2 -name "oh-package.json5" -print | sort
+          EOF
+
+          cat > "$RUNNER_TEMP/harmonyos-bin/hvigorw" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          PROJECT_ROOT="$PWD"
+          while [ "$PROJECT_ROOT" != "/" ] && [ ! -f "$PROJECT_ROOT/pubspec.yaml" ]; do
+            PROJECT_ROOT="$(dirname "$PROJECT_ROOT")"
+          done
+
+          if [ ! -f "$PROJECT_ROOT/pubspec.yaml" ]; then
+            echo "Cannot locate Flutter project root from $PWD" >&2
+            exit 2
+          fi
+
+          export npm_config_userconfig="$PROJECT_ROOT/.npmrc"
+          export npm_config_update_notifier=false
+          exec node "$PROJECT_ROOT/node_modules/@ohos/hvigor/bin/hvigor.js" "$@"
+          EOF
+
+          chmod +x "$RUNNER_TEMP/harmonyos-bin/ohpm" "$RUNNER_TEMP/harmonyos-bin/hvigorw"
+          echo "$RUNNER_TEMP/harmonyos-bin" >> $GITHUB_PATH
+          npm install --no-save @ohos/hvigor@5.2.2 @ohos/hvigor-ohos-plugin@5.2.2
+          "$RUNNER_TEMP/harmonyos-bin/ohpm" --version
+          "$RUNNER_TEMP/harmonyos-bin/hvigorw" --version
+
       # Step C: Build HAP with --no-pub (skip re-resolution, use fixed config)
       - name: Build HAP
         run: flutter build hap --release --no-pub
