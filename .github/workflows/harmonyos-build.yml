@@ -30,7 +30,7 @@ permissions:
 
 env:
   FLUTTER_OHOS_REPO: https://gitcode.com/openharmony-tpc/flutter_flutter.git
-  FLUTTER_OHOS_VERSION: oh-3.41.9-dev
+  FLUTTER_OHOS_VERSION: oh-3.35.7-release
 
 jobs:
   # --- Job 1: Standard Flutter CI (standard SDK: analyze + test) ---
@@ -129,12 +129,17 @@ jobs:
           flutter --version 2>&1 | head -5
           flutter doctor 2>&1 | head -10
 
-      - name: Build HAP
+      - name: Build HAP (experimental - needs OHOS SDK DevEco)
         continue-on-error: true
         run: |
+          # OHOS Flutter SDK uses Dart 3.9.x, project depends on packages
+          # requiring Dart >=3.10. Full HAP build needs a future SDK update.
+          # For now, this step validates the OHOS toolchain installation.
+          echo "OHOS Flutter: $(flutter --version 2>&1 | head -1)"
+          echo "Note: flutter build hap requires Dart 3.10+ SDK (coming in future flutter_flutter release)"
           flutter build hap --release 2>&1 || \
           flutter build hap 2>&1 || \
-          echo "HAP_BUILD_UNSTABLE=true" >> $GITHUB_ENV
+          echo "HAP_BUILD_EXPERIMENTAL=true" >> $GITHUB_ENV
 
       - name: List build outputs
         if: always()
