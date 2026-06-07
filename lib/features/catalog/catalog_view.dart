@@ -6,11 +6,30 @@ import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
 import 'catalog_controller.dart';
 
-class CatalogView extends ConsumerWidget {
+class CatalogView extends ConsumerStatefulWidget {
   const CatalogView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CatalogView> createState() => _CatalogViewState();
+}
+
+class _CatalogViewState extends ConsumerState<CatalogView> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final catalog = ref.watch(catalogControllerProvider);
     final controller = ref.read(catalogControllerProvider.notifier);
 
@@ -52,6 +71,7 @@ class CatalogView extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SearchBar(
+                          controller: _searchController,
                           hintText: '搜索课程、教师或课程号',
                           leading: const Icon(Icons.search),
                           trailing: [

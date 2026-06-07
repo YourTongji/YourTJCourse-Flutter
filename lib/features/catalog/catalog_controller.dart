@@ -146,7 +146,9 @@ class CatalogController extends AsyncNotifier<CatalogState> {
   Future<void> refresh() async {
     final value = state.value ?? const CatalogState();
     _page = 1;
-    state = const AsyncLoading<CatalogState>();
+    if (state.value == null) {
+      state = const AsyncLoading<CatalogState>();
+    }
     state = await AsyncValue.guard(() => _loadPage(value, page: 1));
   }
 
