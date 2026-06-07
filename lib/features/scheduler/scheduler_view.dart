@@ -906,15 +906,17 @@ class _OptionalTypeSelector extends StatelessWidget {
             for (final type in state.optionalTypes)
               FilterChip(
                 label: Text(type.courseLabelName),
-                selected: state.selectedOptionalTypeIds.contains(
-                  type.courseLabelId,
+                selected: type.effectiveCourseLabelIds.every(
+                  state.selectedOptionalTypeIds.contains,
                 ),
                 showCheckmark: true,
                 selectedColor: scheme.primaryContainer,
                 checkmarkColor: scheme.onPrimaryContainer,
                 labelStyle: TextStyle(
                   color:
-                      state.selectedOptionalTypeIds.contains(type.courseLabelId)
+                      type.effectiveCourseLabelIds.every(
+                        state.selectedOptionalTypeIds.contains,
+                      )
                       ? scheme.onPrimaryContainer
                       : scheme.onSurface,
                   fontWeight: FontWeight.w700,
@@ -924,12 +926,14 @@ class _OptionalTypeSelector extends StatelessWidget {
                 ),
                 side: BorderSide(
                   color:
-                      state.selectedOptionalTypeIds.contains(type.courseLabelId)
+                      type.effectiveCourseLabelIds.every(
+                        state.selectedOptionalTypeIds.contains,
+                      )
                       ? scheme.primary
                       : scheme.outlineVariant,
                 ),
                 onSelected: (_) =>
-                    controller.toggleOptionalType(type.courseLabelId),
+                    controller.toggleOptionalType(type.effectiveCourseLabelIds),
               ),
           ],
         ),
@@ -2087,12 +2091,7 @@ String _csvRow(List<String> cells) {
 
 ScheduledClass? _classAt(List<ScheduledClass> selected, int day, int slot) {
   for (final item in selected) {
-    for (final arrangement in item.classInfo.arrangements) {
-      if (arrangement.occupyDay == day &&
-          arrangement.occupyTime.contains(slot)) {
-        return item;
-      }
-    }
+    if (item.occupies(day, slot)) return item;
   }
   return null;
 }

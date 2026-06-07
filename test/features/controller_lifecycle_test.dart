@@ -111,6 +111,42 @@ void main() {
   });
 
   test(
+    'scheduler controller rehydrates saved class for timetable placement',
+    () async {
+      final saved = ScheduledClass(
+        course: _FakeSchedulerRepository.roughSearchCourse,
+        classInfo: const SchedulerClass(
+          code: 'PHYS001.01',
+          campus: '四平路',
+          teachers: [TeacherInfo(teacherName: '王老师', teacherCode: 'T002')],
+          teachingLanguage: '中文',
+          arrangements: [],
+        ),
+      );
+      SharedPreferences.setMockInitialValues({
+        'flutter.de.yourtj.course.scheduler.selected': jsonEncode([
+          saved.toJson(),
+        ]),
+      });
+      final container = ProviderContainer(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _FakeSchedulerRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(schedulerControllerProvider.future);
+      final controller = container.read(schedulerControllerProvider.notifier);
+      final state = container.read(schedulerControllerProvider).value!;
+
+      expect(state.selected.single.occupies(3, 5), isTrue);
+      expect(controller.classAt(3, 5)?.course.courseName, '大学物理');
+    },
+  );
+
+  test(
     'scheduler controller hydrates rough course before adding class',
     () async {
       final container = ProviderContainer(
@@ -153,7 +189,7 @@ void main() {
 
     await container.read(schedulerControllerProvider.future);
     final controller = container.read(schedulerControllerProvider.notifier);
-    controller.toggleOptionalType(1);
+    controller.toggleOptionalType([1]);
     await controller.loadOptionalCourses();
     final state = container.read(schedulerControllerProvider).value!;
 
