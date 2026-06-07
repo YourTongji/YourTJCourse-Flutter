@@ -1,0 +1,7 @@
+{
+  "tool_name": "mcp__open-websearch__fetchWebContent",
+  "tool_input_preview": "{\"url\":\"https://segmentfault.com/a/1190000047483450\",\"maxChars\":20000}",
+  "error": "Failed to fetch web content: Request URL resolves to a private or local network target, which is not allowed",
+  "timestamp": "2026-06-07T18:31:30.209Z",
+  "retry_count": 2
+}

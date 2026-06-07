@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "entries": {
+    "445ed27a3872b681d98190bae61ccb84954e1bc4e140df5370be958dee776b3a": {
+      "last_emitted_at_ms": 1780858142791,
+      "message": "Verify changes work after editing. Test functionality before marking complete."
+    },
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1780858136996,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "956f24d5ace394ba5396c2d6468725f867e69734d223bd128a00a7b21b474dfa": {
+      "last_emitted_at_ms": 1780858116283,
+      "message": "Spawning agent: executor (inherit) [BACKGROUND] | Task: Update README and tags"
+    },
+    "31d518c43282cb15b7eb2e6febe47757d21780f4abf0a7aa4ee46519927dea40": {
+      "last_emitted_at_ms": 1780858112737,
+      "message": "Spawning agent: executor (inherit) [BACKGROUND] | Task: Migrate pubspec dependencies"
+    },
+    "1c4cd833b73e0c2e11a114a4d27497a7821936c85a682ca5de55db90562987b2": {
+      "last_emitted_at_ms": 1780858109118,
+      "message": "Spawning agent: executor (inherit) [BACKGROUND] | Task: Create CI workflow"
+    },
+    "47574c4965486d0480b73e861615d46f5afc4e46d98a61b8b1874994b0d816ce": {
+      "last_emitted_at_ms": 1780858105581,
+      "message": "Spawning agent: executor (inherit) [BACKGROUND] | Task: Generate ohos directory"
+    },
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1780858054778,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "890ee657775f905b99c82b711221fe2d192a96fad9bea4a2aea9376c16f44995": {
+      "last_emitted_at_ms": 1780857446447,
+      "message": "Spawning agent: unknown (inherit) | Task: Architect review harmonyos plan"
+    },
+    "a8f5e6695efa6d9349116989e724782a889f23a4cc6d9a9d9592fdf47e193417": {
+      "last_emitted_at_ms": 1780857438219,
+      "message": "Spawning agent: oh-my-claudecode:architect (inherit) | Task: Architect review harmonyos plan"
+    }
+  },
+  "updated_at": "2026-06-07T18:49:02.791Z"
+}

@@ -1,0 +1,84 @@
+name: HarmonyOS Build HAP
+
+on:
+  push:
+    branches: [harmonyos]
+    paths:
+      - ".github/workflows/harmonyos-build.yml"
+      - "ohos/**"
+      - "lib/**"
+      - "test/**"
+      - "analysis_options.yaml"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+  pull_request:
+    branches: [harmonyos]
+    paths:
+      - ".github/workflows/harmonyos-build.yml"
+      - "ohos/**"
+      - "lib/**"
+      - "test/**"
+      - "analysis_options.yaml"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-hap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (OpenHarmony SDK)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create env file
+        run: |
+          cat > .env <<'EOF'
+          API_BASE_URL=${{ secrets.API_BASE_URL || 'https://jcourse.yourtj.de' }}
+          CREDIT_API_BASE_URL=${{ secrets.CREDIT_API_BASE_URL || 'https://core.credit.yourtj.de' }}
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK (后备 Android 构建)
+        run: flutter build apk --release --split-per-abi --dart-define=APP_BUILD_SHA=$GITHUB_SHA
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: yourtjcourse-flutter-hap
+          path: build/app/outputs/flutter-apk/app-*-release.apk
+          if-no-files-found: warn
+
+      - name: Publish prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/harmonyos'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete harmonyos-latest --cleanup-tag --yes || true
+          gh release create harmonyos-latest build/app/outputs/flutter-apk/app-*-release.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "YourTJ Course HarmonyOS Latest" \
+            --notes "harmonyos 分支自动预发行包。提交：$GITHUB_SHA"

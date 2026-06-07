@@ -1,0 +1,8 @@
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"oh-my-claudecode:plan"}
+{"t":0,"agent":"afac761","agent_type":"architect","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a537dfb","agent_type":"general-purpose","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"oh-my-claudecode:team"}
+{"t":0,"agent":"a246c5a","agent_type":"worker-1","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"aa5a12b","agent_type":"worker-2","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a08d854","agent_type":"worker-3","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a8c3c90","agent_type":"worker-4","event":"agent_start","parent_mode":"none"}

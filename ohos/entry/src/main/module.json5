@@ -1,0 +1,23 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "YourTJ Course",
+    "mainElement": "EntryAbility",
+    "deviceTypes": ["phone", "tablet"],
+    "abilities": [{
+      "name": "EntryAbility",
+      "srcEntry": "./ets/entryability/EntryAbility.ets",
+      "description": "YourTJ Course HarmonyOS",
+      "icon": "$media:app_icon",
+      "label": "$string:app_name",
+      "startWindowIcon": "$media:app_icon",
+      "startWindowBackground": "#FFFFFF",
+      "exported": true,
+      "skills": [{
+        "entities": ["entity.system.home"],
+        "actions": ["action.system.home"]
+      }]
+    }]
+  }
+}

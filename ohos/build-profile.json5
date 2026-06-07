@@ -1,0 +1,30 @@
+{
+  "app": {
+    "signingConfigs": [{
+      "name": "default",
+      "material": {
+        "certpath": "signing/cert.cer",
+        "storePassword": "***",
+        "keyAlias": "YourTJCourse",
+        "keyPassword": "***",
+        "profile": "signing/ProvisionProfile.p7b",
+        "signAlg": "SHA256withECDSA",
+        "storeFile": "signing/keystore.p12"
+      }
+    }]
+  },
+  "modules": [{
+    "name": "entry",
+    "srcPath": "./entry",
+    "targets": [{
+      "name": "default",
+      "applyToProducts": ["default"],
+      "supportSystem": "harmonyos"
+    }]
+  }],
+  "buildOption": {
+    "externalNativeOptions": {
+      "abiFilters": ["arm64-v8a"]
+    }
+  }
+}
