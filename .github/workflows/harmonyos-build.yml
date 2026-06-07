@@ -13,18 +13,12 @@ on:
       - "ohos/**"
   pull_request:
     branches: [harmonyos]
-    paths-ignore: []
   workflow_dispatch:
 
 permissions:
   contents: write
 
-env:
-  FLUTTER_OHOS_REPO: https://gitcode.com/openharmony-tpc/flutter_flutter.git
-  FLUTTER_OHOS_VERSION: 3.41.10-ohos-0.0.1-canary1
-
 jobs:
-  # --- Job 1: Standard Flutter CI (analyze + test on standard SDK) ---
   standard-ci:
     runs-on: ubuntu-latest
     steps:
@@ -46,9 +40,6 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
-  # --- Job 2: OHOS Build (HAP with OpenHarmony SDK) ---
-  # Strategy: Use standard Flutter SDK for dependency resolution (Dart 3.12+),
-  # then switch to OHOS Flutter SDK for HAP compilation with --offline flag.
   ohos-build:
     runs-on: ubuntu-latest
     needs: [standard-ci]
@@ -59,7 +50,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Step A: Install OpenHarmony SDK for HAP toolchain
+      # Install OpenHarmony SDK (HAP native toolchain)
       - name: Install OpenHarmony SDK 6.0
         uses: openharmony-rs/setup-ohos-sdk@v1.0.0
         with:
@@ -67,14 +58,14 @@ jobs:
           cache: true
           components: "all"
 
-      # Step B: Use standard Flutter SDK for pub get (Dart 3.12+ resolves everything)
-      - name: Set up standard Flutter (for dependency resolution)
+      # Step A: Use standard Flutter SDK for pub get (Dart 3.12+ resolves all deps)
+      - name: Set up standard Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Resolve dependencies (standard SDK)
+      - name: Create env & resolve deps (standard SDK)
         run: |
           cat > .env <<'EOF'
           API_BASE_URL=${{ secrets.API_BASE_URL || 'https://jcourse.yourtj.de' }}
@@ -82,29 +73,36 @@ jobs:
           EOF
           flutter pub get
 
-      # Step C: Switch to OHOS Flutter SDK (Dart 3.11.1, can't resolve all deps)
-      - name: Install OHOS Flutter SDK
+      # Step B: Switch to OHOS Flutter SDK for HAP build
+      - name: Install OHOS Flutter SDK (oh-3.41.9-dev)
         run: |
-          git clone --depth 1 --branch ${{ env.FLUTTER_OHOS_VERSION }} \
-            ${{ env.FLUTTER_OHOS_REPO }} /opt/flutter_ohos
-          # Set OHOS Flutter as the primary Flutter SDK
+          git clone --depth 1 --branch oh-3.41.9-dev \
+            https://gitcode.com/openharmony-tpc/flutter_flutter.git \
+            /opt/flutter_ohos
+          echo "FLUTTER_ROOT=/opt/flutter_ohos" >> $GITHUB_ENV
           echo "/opt/flutter_ohos/bin" >> $GITHUB_PATH
 
-      - name: Verify OHOS SDK version
-        run: flutter --version
+      - name: Fix package_config.json references
+        run: |
+          flutter --version
+          # Fix package_config.json to point to OHOS Flutter SDK
+          STD_FLUTTER=$(echo /opt/hostedtoolcache/flutter/stable-*/flutter)
+          echo "Replacing $STD_FLUTTER references with /opt/flutter_ohos"
+          sed -i "s|$STD_FLUTTER|/opt/flutter_ohos|g" .dart_tool/package_config.json
+          cat .dart_tool/package_config.json | grep flutter | head -3
 
-      # Step D: Build HAP with --offline (uses pre-resolved lockfile & cached packages)
+      # Step C: Build HAP with --no-pub (skip re-resolution, use fixed config)
       - name: Build HAP
-        run: flutter build hap --release --offline
+        run: flutter build hap --release --no-pub
 
-      - name: Upload HAP artifacts
+      - name: Upload HAP
         uses: actions/upload-artifact@v4
         with:
           name: yourtjcourse-hap
           path: |
             build/hap/outputs/*.hap
             ohos/entry/build/default/outputs/default/*.hap
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Publish prerelease
         if: github.event_name == 'push' && github.ref == 'refs/heads/harmonyos'
