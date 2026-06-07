@@ -1,8 +1,15 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../domain/models/ai_summary.dart';
+import '../../domain/models/course_detail.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
 import '../../domain/repositories/review_repository.dart';
@@ -60,6 +67,13 @@ class CourseDetailView extends ConsumerWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             RatingStars(rating: course.rating, size: 18),
+                            Text(
+                              course.rating > 0
+                                  ? '${course.rating.toStringAsFixed(1)} 分'
+                                  : '暂无评分',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
                             Text('${course.reviewCount} 条评价'),
                             if (course.department.isNotEmpty)
                               Chip(label: Text(course.department)),
@@ -115,9 +129,12 @@ class CourseDetailView extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final review = state.visibleReviews[index];
                       return ReviewCard(
+                        course: course,
                         review: review,
+                        favorited: state.favoriteReviewIds.contains(review.id),
                         onLike: () => controller.toggleLike(review.id),
                         onHide: () => controller.hideReview(review.id),
+                        onFavorite: () => controller.toggleFavorite(review.id),
                         onReport: () =>
                             _showReportSheet(context, controller, review.id),
                       );
@@ -196,6 +213,7 @@ class CourseDetailView extends ConsumerWidget {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => _ReviewComposeSheet(
+        course: controller.currentDetail,
         controller: controller,
         captchaRepository: ref.read(captchaRepositoryProvider),
       ),
@@ -205,10 +223,12 @@ class CourseDetailView extends ConsumerWidget {
 
 class _ReviewComposeSheet extends StatefulWidget {
   const _ReviewComposeSheet({
+    required this.course,
     required this.controller,
     required this.captchaRepository,
   });
 
+  final CourseDetail course;
   final CourseDetailController controller;
   final CaptchaRepository captchaRepository;
 
@@ -218,17 +238,35 @@ class _ReviewComposeSheet extends StatefulWidget {
 
 class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
   final _commentController = TextEditingController();
-  final _semesterController = TextEditingController();
   final _nameController = TextEditingController();
+  final _qqController = TextEditingController();
+  final _avatarController = TextEditingController();
+  late String _semester;
   int _rating = 0;
+  bool _showReviewer = false;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _semester = _semesterOptions.first;
+  }
 
   @override
   void dispose() {
     _commentController.dispose();
-    _semesterController.dispose();
     _nameController.dispose();
+    _qqController.dispose();
+    _avatarController.dispose();
     super.dispose();
+  }
+
+  List<String> get _semesterOptions {
+    final semesters = [
+      for (final semester in widget.course.semesters)
+        if (semester.trim().isNotEmpty) semester.trim(),
+    ];
+    return [...semesters.toSet(), '其他'];
   }
 
   @override
@@ -275,18 +313,52 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _semesterController,
-                decoration: const InputDecoration(
-                  labelText: '学期',
-                  hintText: '如 2025-2026-1，不填则为其他',
-                ),
+              DropdownButtonFormField<String>(
+                initialValue: _semester,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: '学期'),
+                items: [
+                  for (final option in _semesterOptions)
+                    DropdownMenuItem(value: option, child: Text(option)),
+                ],
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) => setState(() => _semester = value ?? '其他'),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: '昵称（选填）'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('显示点评人信息'),
+                subtitle: const Text('可填写昵称和头像，字段与网页版保持一致'),
+                value: _showReviewer,
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) => setState(() => _showReviewer = value),
               ),
+              if (_showReviewer) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: '昵称'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _qqController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'QQ 号（选填）',
+                    hintText: '填写后使用 QQ 头像',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _avatarController,
+                  decoration: const InputDecoration(
+                    labelText: '头像链接（选填）',
+                    hintText: '优先使用头像链接，其次使用 QQ 头像',
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: valid && !_isSubmitting ? _submit : null,
@@ -321,11 +393,10 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
     final ok = await widget.controller.createReview(
       rating: _rating,
       comment: _commentController.text.trim(),
-      semester: _semesterController.text.trim().isEmpty
-          ? '其他'
-          : _semesterController.text.trim(),
+      semester: _semester,
       captchaToken: captchaToken,
-      reviewerName: _nameController.text.trim(),
+      reviewerName: _showReviewer ? _nameController.text.trim() : null,
+      reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
     );
     if (!mounted) return;
     setState(() => _isSubmitting = false);
@@ -335,6 +406,14 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
       return;
     }
     messenger.showSnackBar(const SnackBar(content: Text('评价提交失败，请稍后重试')));
+  }
+
+  String? get _reviewerAvatar {
+    final direct = _avatarController.text.trim();
+    if (direct.isNotEmpty) return direct;
+    final qq = _qqController.text.trim();
+    if (qq.isEmpty) return null;
+    return 'https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100';
   }
 }
 
@@ -1011,15 +1090,21 @@ class _SummaryPointList extends StatelessWidget {
 class ReviewCard extends StatelessWidget {
   const ReviewCard({
     super.key,
+    required this.course,
     required this.review,
+    required this.favorited,
     required this.onLike,
     required this.onHide,
+    required this.onFavorite,
     required this.onReport,
   });
 
+  final CourseDetail course;
   final Review review;
+  final bool favorited;
   final VoidCallback onLike;
   final VoidCallback onHide;
+  final VoidCallback onFavorite;
   final VoidCallback onReport;
 
   @override
@@ -1034,13 +1119,7 @@ class ReviewCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  child: Text(
-                    (review.reviewerName?.isNotEmpty ?? false)
-                        ? review.reviewerName!.characters.first
-                        : '匿',
-                  ),
-                ),
+                ReviewAvatar(review: review, size: 46),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1059,8 +1138,16 @@ class ReviewCard extends StatelessWidget {
                   onSelected: (value) {
                     if (value == 'hide') onHide();
                     if (value == 'report') onReport();
+                    if (value == 'share') {
+                      showReviewShareDialog(
+                        context,
+                        course: course,
+                        review: review,
+                      );
+                    }
                   },
                   itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'share', child: Text('生成分享图')),
                     PopupMenuItem(value: 'hide', child: Text('隐藏')),
                     PopupMenuItem(value: 'report', child: Text('举报')),
                   ],
@@ -1072,16 +1159,436 @@ class ReviewCard extends StatelessWidget {
             const SizedBox(height: 8),
             MarkdownBody(data: normalizeReviewMarkdown(review.comment)),
             const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: onLike,
-              icon: Icon(
-                review.liked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
-              ),
-              label: Text('${review.likeCount}'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton.icon(
+                  onPressed: onLike,
+                  icon: Icon(
+                    review.liked
+                        ? Icons.thumb_up_alt
+                        : Icons.thumb_up_alt_outlined,
+                  ),
+                  label: Text('${review.likeCount}'),
+                ),
+                TextButton.icon(
+                  onPressed: onFavorite,
+                  icon: Icon(
+                    favorited ? Icons.bookmark : Icons.bookmark_border,
+                  ),
+                  label: Text(favorited ? '已收藏' : '收藏'),
+                ),
+                TextButton.icon(
+                  onPressed: () => showReviewShareDialog(
+                    context,
+                    course: course,
+                    review: review,
+                  ),
+                  icon: const Icon(Icons.ios_share_outlined),
+                  label: const Text('分享图'),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class ReviewAvatar extends StatelessWidget {
+  const ReviewAvatar({super.key, required this.review, this.size = 44});
+
+  final Review review;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final avatar = review.reviewerAvatar?.trim() ?? '';
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.tertiaryContainer,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          (review.reviewerName?.isNotEmpty ?? false)
+              ? review.reviewerName!.characters.first
+              : '匿',
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox.square(
+        dimension: size,
+        child: avatar.startsWith('http')
+            ? Image.network(
+                avatar,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              )
+            : fallback,
+      ),
+    );
+  }
+}
+
+Future<void> showReviewShareDialog(
+  BuildContext context, {
+  required CourseDetail course,
+  required Review review,
+}) async {
+  final key = GlobalKey();
+  String? savedPath;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('课程点评分享图'),
+        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        content: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: RepaintBoundary(
+              key: key,
+              child: ReviewShareCard(course: course, review: review),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              savedPath = await saveReviewShareImage(key, course, review);
+              if (!context.mounted) return;
+              messenger.showSnackBar(SnackBar(content: Text('已保存：$savedPath')));
+            },
+            icon: const Icon(Icons.save_alt_outlined),
+            label: const Text('保存'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () async {
+              final path =
+                  savedPath ?? await saveReviewShareImage(key, course, review);
+              await SharePlus.instance.share(
+                ShareParams(
+                  files: [XFile(path, mimeType: 'image/png')],
+                  text: '来自 YourTJ 选课社区的课程点评',
+                ),
+              );
+            },
+            icon: const Icon(Icons.ios_share_outlined),
+            label: const Text('分享'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<String> saveReviewShareImage(
+  GlobalKey key,
+  CourseDetail course,
+  Review review,
+) async {
+  final boundary =
+      key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+  if (boundary == null) throw StateError('分享图尚未渲染');
+  final image = await boundary.toImage(pixelRatio: 3);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  final data = bytes?.buffer.asUint8List();
+  if (data == null) throw StateError('分享图生成失败');
+  final directory = await getApplicationDocumentsDirectory();
+  final safeCode = course.code.isEmpty ? 'yourtj' : course.code;
+  final file = File('${directory.path}/$safeCode-${review.sqid}.png');
+  await file.writeAsBytes(data, flush: true);
+  return file.path;
+}
+
+class ReviewShareCard extends StatelessWidget {
+  const ReviewShareCard({
+    super.key,
+    required this.course,
+    required this.review,
+  });
+
+  final CourseDetail course;
+  final Review review;
+
+  @override
+  Widget build(BuildContext context) {
+    final reviewerName = (review.reviewerName?.trim().isNotEmpty ?? false)
+        ? review.reviewerName!.trim()
+        : '匿名用户';
+    return Material(
+      color: Colors.white,
+      child: SizedBox(
+        width: 760,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 28, 32, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'YOURTJ 选课社区',
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.8,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            course.name,
+                            style: const TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 30,
+                              height: 1.16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _SharePill(
+                            text: course.code,
+                            foreground: Colors.white,
+                            background: const Color(0xFF0F172A),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              '课程评分',
+                              style: TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              course.rating > 0
+                                  ? '${course.rating.toStringAsFixed(1)} / 5.0'
+                                  : '- / 5.0',
+                              style: const TextStyle(
+                                color: Color(0xFFF59E0B),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              '${course.reviewCount} 条评价',
+                              style: const TextStyle(
+                                color: Color(0xFF334155),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 26),
+                Row(
+                  children: [
+                    ReviewAvatar(review: review, size: 58),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            reviewerName,
+                            style: const TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            '${review.semester} · ${_formatReviewDate(review.createdAt)}',
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _SharePill(
+                      text: '${review.rating.toStringAsFixed(1)} / 5',
+                      foreground: const Color(0xFFD97706),
+                      background: const Color(0xFFFFFBEB),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _SharePill(
+                      text:
+                          '教师：${course.teacherName.isEmpty ? '未知教师' : course.teacherName}',
+                      foreground: const Color(0xFF0E7490),
+                      background: const Color(0xFFECFEFF),
+                    ),
+                    _SharePill(
+                      text: '学期：${review.semester}',
+                      foreground: const Color(0xFF4338CA),
+                      background: const Color(0xFFEEF2FF),
+                    ),
+                    _SharePill(
+                      text: '编号：${review.sqid}',
+                      foreground: const Color(0xFF047857),
+                      background: const Color(0xFFECFDF5),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Text(
+                      review.comment,
+                      style: const TextStyle(
+                        color: Color(0xFF334155),
+                        fontSize: 17,
+                        height: 1.72,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '内容来自 YOURTJ 选课社区',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'xk.yourtj.de',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SharePill extends StatelessWidget {
+  const _SharePill({
+    required this.text,
+    required this.foreground,
+    required this.background,
+  });
+
+  final String text;
+  final Color foreground;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: foreground,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatReviewDate(String raw) {
+  final parsed = DateTime.tryParse(raw);
+  final timestamp = int.tryParse(raw);
+  final date =
+      parsed ??
+      (timestamp == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000));
+  if (date == null) return raw.isEmpty ? '刚刚' : raw;
+  final local = date.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  return '${local.year}-$month-$day';
 }

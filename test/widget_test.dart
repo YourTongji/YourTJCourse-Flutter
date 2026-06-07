@@ -32,6 +32,7 @@ void main() {
 
     expect(find.text('查课'), findsOneWidget);
     expect(find.text('排课'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
     expect(find.text('更多'), findsOneWidget);
   });
 

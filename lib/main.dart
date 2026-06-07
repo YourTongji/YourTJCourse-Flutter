@@ -10,6 +10,7 @@ import 'features/catalog/catalog_view.dart';
 import 'features/announcements/announcement_controller.dart';
 import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
+import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'domain/models/runtime_state.dart';
@@ -86,6 +87,7 @@ ThemeData _buildTheme(Brightness brightness) {
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorCatalogKey = GlobalKey<NavigatorState>();
 final _shellNavigatorSchedulerKey = GlobalKey<NavigatorState>();
+final _shellNavigatorProfileKey = GlobalKey<NavigatorState>();
 final _shellNavigatorSettingsKey = GlobalKey<NavigatorState>();
 
 final _router = GoRouter(
@@ -112,6 +114,15 @@ final _router = GoRouter(
             GoRoute(
               path: '/scheduler',
               builder: (context, state) => const SchedulerView(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _shellNavigatorProfileKey,
+          routes: [
+            GoRoute(
+              path: '/profile',
+              builder: (context, state) => const ProfileView(),
             ),
           ],
         ),
@@ -380,6 +391,11 @@ class _AppNavigationBar extends StatelessWidget {
             icon: Icon(Icons.view_week_outlined),
             selectedIcon: Icon(Icons.view_week),
             label: '排课',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: '我的',
           ),
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),

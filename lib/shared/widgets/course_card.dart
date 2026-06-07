@@ -40,6 +40,14 @@ class CourseCard extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   RatingStars(rating: course.rating),
+                  Text(
+                    course.rating > 0
+                        ? '${course.rating.toStringAsFixed(1)} 分'
+                        : '暂无评分',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   Text('${course.reviewCount} 条评价'),
                   if (course.department.isNotEmpty)
                     Chip(
