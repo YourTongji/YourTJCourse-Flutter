@@ -730,13 +730,6 @@ class _TimetableSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (state.timetableEntries.isNotEmpty) ...[
-            _ScheduleRenderStatus(
-              selectedCount: state.selected.length,
-              entryCount: state.timetableEntries.length,
-            ),
-            const SizedBox(height: 10),
-          ],
           if (state.selected.isNotEmpty && state.timetableEntries.isEmpty) ...[
             _ScheduleWarning(unscheduled: state.unscheduledSelected),
             const SizedBox(height: 10),
@@ -1321,51 +1314,53 @@ class _TimetableRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: leftWidth,
-            height: cellHeight,
-            child: Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Center(
-                    child: Text(
-                      '$section',
-                      style: TextStyle(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: scheme.primary,
+      child: SizedBox(
+        height: cellHeight,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: leftWidth,
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Center(
+                      child: Text(
+                        '$section',
+                        style: TextStyle(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: scheme.primary,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          for (var day = 1; day <= 7; day++)
-            SizedBox(
-              width: dayWidth,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: _TimetableCell(
-                  day: day,
-                  section: section,
-                  height: cellHeight,
-                  entries: entries,
-                  controller: controller,
+            for (var day = 1; day <= 7; day++)
+              SizedBox(
+                width: dayWidth,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: _TimetableCell(
+                    day: day,
+                    section: section,
+                    height: cellHeight,
+                    entries: entries,
+                    controller: controller,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1390,15 +1385,28 @@ class _TimetableCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final entry = _entryAt(entries, day, section);
     final radius = BorderRadius.circular(11);
-    return InkWell(
-      borderRadius: radius,
+    return GestureDetector(
+      key: ValueKey('scheduler-cell-$day-$section'),
       onTap: () => controller.findByTime(day: day, section: section),
       onLongPress: entry == null
           ? null
           : () => _showClassSheet(context, entry.item),
-      child: entry == null
-          ? _EmptyTimetableCell(height: height, radius: radius)
-          : _FilledTimetableCell(entry: entry, height: height, radius: radius),
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: entry == null
+            ? _EmptyTimetableCell(height: height, radius: radius)
+            : RepaintBoundary(
+                key: ValueKey(
+                  'scheduler-course-cell-$day-$section-${entry.item.classInfo.code}',
+                ),
+                child: _FilledTimetableCell(
+                  entry: entry,
+                  height: height,
+                  radius: radius,
+                ),
+              ),
+      ),
     );
   }
 
@@ -1518,47 +1526,6 @@ class _FilledTimetableCell extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ScheduleRenderStatus extends StatelessWidget {
-  const _ScheduleRenderStatus({
-    required this.selectedCount,
-    required this.entryCount,
-  });
-
-  final int selectedCount;
-  final int entryCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          children: [
-            Icon(Icons.view_week_outlined, size: 18, color: scheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '已选 $selectedCount 门课，周课表已渲染 $entryCount 个节次',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
