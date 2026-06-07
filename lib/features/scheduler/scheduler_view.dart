@@ -520,56 +520,35 @@ class _MajorSection extends StatelessWidget {
                     .firstOrNull
                     ?.calendarName ??
                 '未选择',
+            maxValueLines: 2,
             onTap: state.calendars.isEmpty
                 ? null
                 : () => _showCalendarSheet(context, state.calendars),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _PickerTile(
-                  icon: Icons.school_outlined,
-                  label: '年级',
-                  value: state.selectedGrade == null
-                      ? '未选择'
-                      : '${state.selectedGrade} 级',
-                  onTap: state.grades.isEmpty
-                      ? null
-                      : () => _showGradeSheet(context, state.grades),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _PickerTile(
-                  icon: Icons.apartment_outlined,
-                  label: '专业',
-                  value: selectedMajor == null
-                      ? '选择专业'
-                      : '${selectedMajor.code} ${selectedMajor.name}',
-                  onTap: state.majors.isEmpty
-                      ? null
-                      : () => _showMajorSheet(context, state.majors),
-                ),
-              ),
-            ],
+          _PickerTile(
+            icon: Icons.school_outlined,
+            label: '年级',
+            value: state.selectedGrade == null
+                ? '未选择'
+                : '${state.selectedGrade} 级',
+            maxValueLines: 2,
+            onTap: state.grades.isEmpty
+                ? null
+                : () => _showGradeSheet(context, state.grades),
           ),
-          if (state.optionalTypes.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final type in state.optionalTypes.take(8))
-                  LkcnTag(
-                    text: type.courseLabelName,
-                    type: LkcnTagType.light,
-                    color: LkcnTagColor.blue,
-                    round: true,
-                  ),
-              ],
-            ),
-          ],
+          const SizedBox(height: 8),
+          _PickerTile(
+            icon: Icons.apartment_outlined,
+            label: '专业',
+            value: selectedMajor == null
+                ? '选择专业'
+                : '${selectedMajor.code} ${selectedMajor.name}',
+            maxValueLines: 2,
+            onTap: state.majors.isEmpty
+                ? null
+                : () => _showMajorSheet(context, state.majors),
+          ),
           const SizedBox(height: 10),
           LkcnButton(
             text: state.isMajorCoursesLoading ? '加载中...' : '加载专业课表',
@@ -852,6 +831,7 @@ class _OptionalCandidatesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectedCount = state.selectedOptionalTypeIds.length;
     return _SectionCard(
       title: state.optionalCourses.isEmpty
           ? '通识选修候选'
@@ -861,11 +841,17 @@ class _OptionalCandidatesSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (state.optionalTypes.isNotEmpty) ...[
+            _OptionalTypeSelector(state: state, controller: controller),
+            const SizedBox(height: 10),
+          ],
           if (state.optionalCourses.isEmpty)
             EmptyState(
               message: state.optionalTypes.isEmpty
                   ? '当前学期暂无可加载的通识选修类型'
-                  : '点击下方按钮加载通识选修课程候选',
+                  : selectedCount == 0
+                  ? '先选择想看的选修课分类'
+                  : '点击下方按钮加载所选分类课程',
               icon: Icons.auto_awesome_motion_outlined,
             )
           else
@@ -876,7 +862,7 @@ class _OptionalCandidatesSection extends StatelessWidget {
             ),
           const SizedBox(height: 10),
           LkcnButton(
-            text: state.isBusy ? '加载中...' : '加载通识选修课',
+            text: state.isBusy ? '加载中...' : '加载所选分类',
             icon: const Icon(Icons.auto_awesome_motion_outlined),
             block: true,
             round: true,
@@ -884,11 +870,70 @@ class _OptionalCandidatesSection extends StatelessWidget {
             disabled:
                 state.isBusy ||
                 state.selectedCalendarId == null ||
-                state.optionalTypes.isEmpty,
+                state.selectedOptionalTypeIds.isEmpty,
             onTap: controller.loadOptionalCourses,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _OptionalTypeSelector extends StatelessWidget {
+  const _OptionalTypeSelector({required this.state, required this.controller});
+
+  final SchedulerState state;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '选择想看的分类',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final type in state.optionalTypes)
+              FilterChip(
+                label: Text(type.courseLabelName),
+                selected: state.selectedOptionalTypeIds.contains(
+                  type.courseLabelId,
+                ),
+                showCheckmark: true,
+                selectedColor: scheme.primaryContainer,
+                checkmarkColor: scheme.onPrimaryContainer,
+                labelStyle: TextStyle(
+                  color:
+                      state.selectedOptionalTypeIds.contains(type.courseLabelId)
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+                backgroundColor: scheme.surfaceContainerHighest.withValues(
+                  alpha: 0.65,
+                ),
+                side: BorderSide(
+                  color:
+                      state.selectedOptionalTypeIds.contains(type.courseLabelId)
+                      ? scheme.primary
+                      : scheme.outlineVariant,
+                ),
+                onSelected: (_) =>
+                    controller.toggleOptionalType(type.courseLabelId),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1038,12 +1083,14 @@ class _PickerTile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.maxValueLines = 1,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final VoidCallback? onTap;
+  final int maxValueLines;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,7 +1121,7 @@ class _PickerTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       value,
-                      maxLines: 1,
+                      maxLines: maxValueLines,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -1188,6 +1235,7 @@ class _TimetableGrid extends StatelessWidget {
                 leftWidth: leftWidth,
                 dayWidth: dayWidth,
                 cellHeight: cellHeight,
+                selected: state.selected,
                 controller: controller,
               ),
           ],
@@ -1237,6 +1285,7 @@ class _TimetableRow extends StatelessWidget {
     required this.leftWidth,
     required this.dayWidth,
     required this.cellHeight,
+    required this.selected,
     required this.controller,
   });
 
@@ -1244,6 +1293,7 @@ class _TimetableRow extends StatelessWidget {
   final double leftWidth;
   final double dayWidth;
   final double cellHeight;
+  final List<ScheduledClass> selected;
   final SchedulerController controller;
 
   @override
@@ -1290,6 +1340,7 @@ class _TimetableRow extends StatelessWidget {
                   day: day,
                   section: section,
                   height: cellHeight,
+                  selected: selected,
                   controller: controller,
                 ),
               ),
@@ -1305,17 +1356,19 @@ class _TimetableCell extends StatelessWidget {
     required this.day,
     required this.section,
     required this.height,
+    required this.selected,
     required this.controller,
   });
 
   final int day;
   final int section;
   final double height;
+  final List<ScheduledClass> selected;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
-    final item = controller.classAt(day, section);
+    final item = _classAt(selected, day, section);
     final radius = BorderRadius.circular(11);
     return InkWell(
       borderRadius: radius,
@@ -2030,6 +2083,18 @@ String _csvRow(List<String> cells) {
         return '"$escaped"';
       })
       .join(',');
+}
+
+ScheduledClass? _classAt(List<ScheduledClass> selected, int day, int slot) {
+  for (final item in selected) {
+    for (final arrangement in item.classInfo.arrangements) {
+      if (arrangement.occupyDay == day &&
+          arrangement.occupyTime.contains(slot)) {
+        return item;
+      }
+    }
+  }
+  return null;
 }
 
 Color _courseColor(String input) {

@@ -237,16 +237,36 @@ class _SplashOverlay extends StatelessWidget {
           children: [
             _LogoPulse(size: 92),
             const SizedBox(height: 18),
-            Text(
-              'YourTJ Course',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: scheme.onSurface,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '你的',
+                    style: TextStyle(color: _macaronBlue(context)),
+                  ),
+                  TextSpan(
+                    text: '，',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                  TextSpan(
+                    text: '同济',
+                    style: TextStyle(color: _macaronPink(context)),
+                  ),
+                  TextSpan(
+                    text: '的',
+                    style: TextStyle(color: _macaronGreen(context)),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              '正在同步选课数据',
+              'YourTJ Course',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
@@ -256,6 +276,24 @@ class _SplashOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _macaronBlue(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF9AD8FF)
+      : const Color(0xFF178CCB);
+}
+
+Color _macaronPink(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFFFC3D5)
+      : const Color(0xFFD94E7D);
+}
+
+Color _macaronGreen(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFA9E8C7)
+      : const Color(0xFF228A63);
 }
 
 class _LogoPulse extends StatefulWidget {

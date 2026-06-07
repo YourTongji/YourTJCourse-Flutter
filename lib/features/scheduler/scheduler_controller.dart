@@ -23,6 +23,7 @@ class SchedulerState {
     this.searchCourses = const [],
     this.timeCourses = const [],
     this.optionalTypes = const [],
+    this.selectedOptionalTypeIds = const {},
     this.selected = const [],
     this.selectedCalendarId,
     this.selectedGrade,
@@ -42,6 +43,7 @@ class SchedulerState {
   final List<SchedulerCourse> searchCourses;
   final List<SchedulerCourse> timeCourses;
   final List<OptionalCourseType> optionalTypes;
+  final Set<int> selectedOptionalTypeIds;
   final List<ScheduledClass> selected;
   final int? selectedCalendarId;
   final int? selectedGrade;
@@ -61,6 +63,7 @@ class SchedulerState {
     List<SchedulerCourse>? searchCourses,
     List<SchedulerCourse>? timeCourses,
     List<OptionalCourseType>? optionalTypes,
+    Set<int>? selectedOptionalTypeIds,
     List<ScheduledClass>? selected,
     int? selectedCalendarId,
     int? selectedGrade,
@@ -83,6 +86,8 @@ class SchedulerState {
       searchCourses: searchCourses ?? this.searchCourses,
       timeCourses: timeCourses ?? this.timeCourses,
       optionalTypes: optionalTypes ?? this.optionalTypes,
+      selectedOptionalTypeIds:
+          selectedOptionalTypeIds ?? this.selectedOptionalTypeIds,
       selected: selected ?? this.selected,
       selectedCalendarId: selectedCalendarId ?? this.selectedCalendarId,
       selectedGrade: clearGrade ? null : selectedGrade ?? this.selectedGrade,
@@ -133,32 +138,11 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         ),
       ]);
       final grades = results[0] as List<int>;
-      final selectedGrade = grades.firstOrNull;
-      final majors = selectedGrade == null
-          ? const <MajorInfo>[]
-          : await _repository.findMajorByGrade(
-              calendarId: calendarId,
-              grade: selectedGrade,
-              cancelToken: _cancelToken,
-            );
-      final selectedMajorCode = majors.firstOrNull?.code;
-      final majorCourses = selectedGrade == null || selectedMajorCode == null
-          ? const <SchedulerCourse>[]
-          : await _repository.findCourseByMajor(
-              calendarId: calendarId,
-              grade: selectedGrade,
-              code: selectedMajorCode,
-              cancelToken: _cancelToken,
-            );
       final selected = await _restoreSelectedClasses();
       return SchedulerState(
         calendars: calendars,
         selectedCalendarId: calendarId,
         grades: grades,
-        selectedGrade: selectedGrade,
-        majors: majors,
-        selectedMajorCode: selectedMajorCode,
-        majorCourses: majorCourses,
         optionalTypes: results[1] as List<OptionalCourseType>,
         selected: selected,
       );
@@ -183,6 +167,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         optionalCourses: const [],
         timeCourses: const [],
         searchCourses: const [],
+        selectedOptionalTypeIds: const {},
         clearGrade: true,
         clearMajor: true,
         isBusy: true,
@@ -202,32 +187,15 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       ]);
       final latest = state.value ?? current;
       final grades = results[0] as List<int>;
-      final selectedGrade = grades.firstOrNull;
-      final majors = selectedGrade == null
-          ? const <MajorInfo>[]
-          : await _repository.findMajorByGrade(
-              calendarId: calendarId,
-              grade: selectedGrade,
-              cancelToken: _cancelToken,
-            );
-      final selectedMajorCode = majors.firstOrNull?.code;
-      final majorCourses = selectedGrade == null || selectedMajorCode == null
-          ? const <SchedulerCourse>[]
-          : await _repository.findCourseByMajor(
-              calendarId: calendarId,
-              grade: selectedGrade,
-              code: selectedMajorCode,
-              cancelToken: _cancelToken,
-            );
       state = AsyncData(
         latest.copyWith(
           grades: grades,
-          selectedGrade: selectedGrade,
-          majors: majors,
-          selectedMajorCode: selectedMajorCode,
-          majorCourses: majorCourses,
+          majors: const [],
           optionalTypes: results[1] as List<OptionalCourseType>,
+          selectedOptionalTypeIds: const {},
           isBusy: false,
+          clearGrade: true,
+          clearMajor: true,
         ),
       );
     });
@@ -244,6 +212,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         majors: const [],
         majorCourses: const [],
         optionalCourses: const [],
+        selectedOptionalTypeIds: const {},
         clearMajor: true,
         isBusy: true,
         isMajorOptionsLoading: true,
@@ -257,20 +226,10 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         cancelToken: _cancelToken,
       );
       final latest = state.value ?? current;
-      final selectedMajorCode = majors.firstOrNull?.code;
-      final majorCourses = selectedMajorCode == null
-          ? const <SchedulerCourse>[]
-          : await _repository.findCourseByMajor(
-              calendarId: calendarId,
-              grade: grade,
-              code: selectedMajorCode,
-              cancelToken: _cancelToken,
-            );
       state = AsyncData(
         latest.copyWith(
           majors: majors,
-          selectedMajorCode: selectedMajorCode,
-          majorCourses: majorCourses,
+          clearMajor: true,
           isBusy: false,
           isMajorOptionsLoading: false,
         ),
@@ -330,7 +289,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<void> loadOptionalCourses() async {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;
-    if (calendarId == null || current.optionalTypes.isEmpty) return;
+    if (calendarId == null || current.selectedOptionalTypeIds.isEmpty) return;
     state = AsyncData(
       current.copyWith(
         optionalCourses: const [],
@@ -343,9 +302,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     await _guard(() async {
       final courses = await _repository.findCourseByNatureId(
         calendarId: calendarId,
-        ids: current.optionalTypes
-            .map((item) => item.courseLabelId)
-            .toList(growable: false),
+        ids: current.selectedOptionalTypeIds.toList(growable: false),
         cancelToken: _cancelToken,
       );
       final latest = state.value ?? current;
@@ -353,6 +310,21 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         latest.copyWith(optionalCourses: courses, isBusy: false),
       );
     });
+  }
+
+  void toggleOptionalType(int courseLabelId) {
+    final current = state.value ?? const SchedulerState();
+    final selected = {...current.selectedOptionalTypeIds};
+    if (!selected.add(courseLabelId)) {
+      selected.remove(courseLabelId);
+    }
+    state = AsyncData(
+      current.copyWith(
+        selectedOptionalTypeIds: selected,
+        optionalCourses: const [],
+        clearNotice: true,
+      ),
+    );
   }
 
   Future<void> search({

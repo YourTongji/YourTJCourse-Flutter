@@ -53,11 +53,37 @@ void main() {
     expect(first.selectedCalendarId, 202401);
     expect(second.selectedCalendarId, 202401);
     expect(second.grades, [2024]);
-    expect(second.selectedGrade, 2024);
-    expect(second.selectedMajorCode, '080901');
-    expect(second.majors.single.name, '计算机科学与技术');
-    expect(second.majorCourses.single.courseName, '数据结构');
+    expect(second.selectedGrade, isNull);
+    expect(second.selectedMajorCode, isNull);
+    expect(second.majors, isEmpty);
+    expect(second.majorCourses, isEmpty);
   });
+
+  test(
+    'scheduler controller loads major candidates after user selection',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _FakeSchedulerRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(schedulerControllerProvider.future);
+      final controller = container.read(schedulerControllerProvider.notifier);
+      await controller.selectGrade(2024);
+      controller.selectMajor('080901');
+      await controller.loadMajorCourses();
+      final state = container.read(schedulerControllerProvider).value!;
+
+      expect(state.selectedGrade, 2024);
+      expect(state.selectedMajorCode, '080901');
+      expect(state.majors.single.name, '计算机科学与技术');
+      expect(state.majorCourses.single.courseName, '数据结构');
+    },
+  );
 
   test('scheduler controller restores selected simulation classes', () async {
     final saved = ScheduledClass(
@@ -127,9 +153,11 @@ void main() {
 
     await container.read(schedulerControllerProvider.future);
     final controller = container.read(schedulerControllerProvider.notifier);
+    controller.toggleOptionalType(1);
     await controller.loadOptionalCourses();
     final state = container.read(schedulerControllerProvider).value!;
 
+    expect(state.selectedOptionalTypeIds, {1});
     expect(state.optionalCourses.single.courseName, '艺术导论');
     expect(state.optionalCourses.single.courseNature, ['通识选修']);
   });
