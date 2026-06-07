@@ -174,6 +174,10 @@ void main() {
       expect(hydrated.classes.single.code, 'PHYS001.01');
       expect(state.searchCourses.single.classes.single.code, 'PHYS001.01');
       expect(state.selected.single.course.courseName, '大学物理');
+      expect(state.timetableEntries, hasLength(2));
+      expect(state.timetableEntries.map((entry) => entry.day), [3, 3]);
+      expect(state.timetableEntries.map((entry) => entry.slot), [5, 6]);
+      expect(controller.classAt(3, 5)?.course.courseName, '大学物理');
     },
   );
 

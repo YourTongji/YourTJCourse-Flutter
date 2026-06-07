@@ -54,6 +54,18 @@ class SchedulerState {
   final bool isMajorOptionsLoading;
   final bool isMajorCoursesLoading;
 
+  List<SchedulerTimetableEntry> get timetableEntries {
+    return selected
+        .expand(SchedulerTimetableEntry.fromClass)
+        .toList(growable: false);
+  }
+
+  List<ScheduledClass> get unscheduledSelected {
+    return selected
+        .where((item) => SchedulerTimetableEntry.fromClass(item).isEmpty)
+        .toList(growable: false);
+  }
+
   SchedulerState copyWith({
     List<CalendarTerm>? calendars,
     List<int>? grades,
@@ -102,6 +114,56 @@ class SchedulerState {
       isMajorCoursesLoading:
           isMajorCoursesLoading ?? this.isMajorCoursesLoading,
     );
+  }
+}
+
+class SchedulerTimetableEntry {
+  const SchedulerTimetableEntry({
+    required this.day,
+    required this.slot,
+    required this.item,
+    required this.arrangement,
+  });
+
+  factory SchedulerTimetableEntry.fromArrangement({
+    required ScheduledClass item,
+    required ArrangementInfo arrangement,
+    required int slot,
+  }) {
+    return SchedulerTimetableEntry(
+      day: arrangement.occupyDay,
+      slot: slot,
+      item: item,
+      arrangement: arrangement,
+    );
+  }
+
+  static List<SchedulerTimetableEntry> fromClass(ScheduledClass item) {
+    final entries = <SchedulerTimetableEntry>[];
+    for (final arrangement in item.classInfo.arrangements) {
+      final day = arrangement.occupyDay;
+      if (day < 1 || day > 7) continue;
+      for (final slot in arrangement.occupyTime) {
+        if (slot < 1 || slot > 12) continue;
+        entries.add(
+          SchedulerTimetableEntry.fromArrangement(
+            item: item,
+            arrangement: arrangement,
+            slot: slot,
+          ),
+        );
+      }
+    }
+    return entries;
+  }
+
+  final int day;
+  final int slot;
+  final ScheduledClass item;
+  final ArrangementInfo arrangement;
+
+  bool occupies(int targetDay, int targetSlot) {
+    return day == targetDay && slot == targetSlot;
   }
 }
 
@@ -470,8 +532,8 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   ScheduledClass? classAt(int day, int slot) {
     final current = state.value;
     if (current == null) return null;
-    for (final item in current.selected) {
-      if (item.occupies(day, slot)) return item;
+    for (final entry in current.timetableEntries) {
+      if (entry.occupies(day, slot)) return entry.item;
     }
     return null;
   }

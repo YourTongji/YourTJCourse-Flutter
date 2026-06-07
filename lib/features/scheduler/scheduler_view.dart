@@ -727,7 +727,16 @@ class _TimetableSection extends StatelessWidget {
       ),
       footer: '点击空白格查询该时间段课程，长按课程格查看教学班详情。',
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-      child: _TimetableGrid(state: state, controller: controller),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (state.selected.isNotEmpty && state.timetableEntries.isEmpty) ...[
+            _ScheduleWarning(unscheduled: state.unscheduledSelected),
+            const SizedBox(height: 10),
+          ],
+          _TimetableGrid(state: state, controller: controller),
+        ],
+      ),
     );
   }
 
@@ -1239,7 +1248,7 @@ class _TimetableGrid extends StatelessWidget {
                 leftWidth: leftWidth,
                 dayWidth: dayWidth,
                 cellHeight: cellHeight,
-                selected: state.selected,
+                entries: state.timetableEntries,
                 controller: controller,
               ),
           ],
@@ -1289,7 +1298,7 @@ class _TimetableRow extends StatelessWidget {
     required this.leftWidth,
     required this.dayWidth,
     required this.cellHeight,
-    required this.selected,
+    required this.entries,
     required this.controller,
   });
 
@@ -1297,7 +1306,7 @@ class _TimetableRow extends StatelessWidget {
   final double leftWidth;
   final double dayWidth;
   final double cellHeight;
-  final List<ScheduledClass> selected;
+  final List<SchedulerTimetableEntry> entries;
   final SchedulerController controller;
 
   @override
@@ -1344,7 +1353,7 @@ class _TimetableRow extends StatelessWidget {
                   day: day,
                   section: section,
                   height: cellHeight,
-                  selected: selected,
+                  entries: entries,
                   controller: controller,
                 ),
               ),
@@ -1360,27 +1369,29 @@ class _TimetableCell extends StatelessWidget {
     required this.day,
     required this.section,
     required this.height,
-    required this.selected,
+    required this.entries,
     required this.controller,
   });
 
   final int day;
   final int section;
   final double height;
-  final List<ScheduledClass> selected;
+  final List<SchedulerTimetableEntry> entries;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
-    final item = _classAt(selected, day, section);
+    final entry = _entryAt(entries, day, section);
     final radius = BorderRadius.circular(11);
     return InkWell(
       borderRadius: radius,
       onTap: () => controller.findByTime(day: day, section: section),
-      onLongPress: item == null ? null : () => _showClassSheet(context, item),
-      child: item == null
+      onLongPress: entry == null
+          ? null
+          : () => _showClassSheet(context, entry.item),
+      child: entry == null
           ? _EmptyTimetableCell(height: height, radius: radius)
-          : _FilledTimetableCell(item: item, height: height, radius: radius),
+          : _FilledTimetableCell(entry: entry, height: height, radius: radius),
     );
   }
 
@@ -1426,26 +1437,26 @@ class _EmptyTimetableCell extends StatelessWidget {
 
 class _FilledTimetableCell extends StatelessWidget {
   const _FilledTimetableCell({
-    required this.item,
+    required this.entry,
     required this.height,
     required this.radius,
   });
 
-  final ScheduledClass item;
+  final SchedulerTimetableEntry entry;
   final double height;
   final BorderRadius radius;
 
   @override
   Widget build(BuildContext context) {
+    final item = entry.item;
     final color = _courseColor(item.classInfo.code);
     final teachers = item.classInfo.teachers
         .map((teacher) => teacher.teacherName)
         .where((name) => name.isNotEmpty)
         .join('、');
-    final room = item.classInfo.arrangements
-        .map((arrangement) => arrangement.occupyRoom)
-        .where((name) => name.isNotEmpty)
-        .firstOrNull;
+    final room = entry.arrangement.occupyRoom.isEmpty
+        ? null
+        : entry.arrangement.occupyRoom;
     return Container(
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
@@ -1491,6 +1502,51 @@ class _FilledTimetableCell extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ScheduleWarning extends StatelessWidget {
+  const _ScheduleWarning({required this.unscheduled});
+
+  final List<ScheduledClass> unscheduled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final names = unscheduled
+        .map((item) => item.course.courseName)
+        .where((name) => name.isNotEmpty)
+        .take(3)
+        .join('、');
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 18, color: scheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                names.isEmpty
+                    ? '已选课程缺少可用排课时间，暂时无法放入周课表。'
+                    : '$names 缺少可用排课时间，暂时无法放入周课表。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onErrorContainer,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2089,9 +2145,13 @@ String _csvRow(List<String> cells) {
       .join(',');
 }
 
-ScheduledClass? _classAt(List<ScheduledClass> selected, int day, int slot) {
-  for (final item in selected) {
-    if (item.occupies(day, slot)) return item;
+SchedulerTimetableEntry? _entryAt(
+  List<SchedulerTimetableEntry> entries,
+  int day,
+  int slot,
+) {
+  for (final entry in entries) {
+    if (entry.occupies(day, slot)) return entry;
   }
   return null;
 }
