@@ -64,18 +64,27 @@ class OptionalCourseType {
   const OptionalCourseType({
     required this.courseLabelId,
     required this.courseLabelName,
+    this.courseLabelIds = const [],
   });
 
   factory OptionalCourseType.fromJson(Object? json) {
     final map = asJsonMap(json);
+    final id = readInt(map['courseLabelId']) ?? 0;
     return OptionalCourseType(
-      courseLabelId: readInt(map['courseLabelId']) ?? 0,
+      courseLabelId: id,
       courseLabelName: readString(map['courseLabelName']) ?? '',
+      courseLabelIds: [id],
     );
   }
 
   final int courseLabelId;
   final String courseLabelName;
+  final List<int> courseLabelIds;
+
+  List<int> get effectiveCourseLabelIds {
+    if (courseLabelIds.isEmpty) return [courseLabelId];
+    return courseLabelIds;
+  }
 }
 
 class SchedulerCourse {
@@ -108,6 +117,32 @@ class SchedulerCourse {
     );
   }
 
+  Map<String, Object?> toJson() {
+    return {
+      'courseCode': courseCode,
+      'courseName': courseName,
+      'credit': credit,
+      'faculty': faculty,
+      'courseNature': courseNature,
+      'campus': campus,
+      'grade': grade,
+      'courses': classes.map((item) => item.toJson()).toList(growable: false),
+    };
+  }
+
+  SchedulerCourse copyWith({List<SchedulerClass>? classes}) {
+    return SchedulerCourse(
+      courseCode: courseCode,
+      courseName: courseName,
+      credit: credit,
+      faculty: faculty,
+      courseNature: courseNature,
+      campus: campus,
+      classes: classes ?? this.classes,
+      grade: grade,
+    );
+  }
+
   final String courseCode;
   final String courseName;
   final double credit;
@@ -132,7 +167,8 @@ class SchedulerClass {
   factory SchedulerClass.fromJson(Object? json) {
     final map = asJsonMap(json);
     final rawTeachers = map['teachers'];
-    final rawArrangements = map['arrangementInfo'];
+    final rawArrangements =
+        map['arrangementInfo'] ?? map['arrangements'] ?? map['arrangeInfo'];
     return SchedulerClass(
       code: readString(map['code']) ?? '',
       campus: readString(map['campus']) ?? '',
@@ -148,6 +184,20 @@ class SchedulerClass {
                 .toList(growable: false)
           : const [],
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'code': code,
+      'campus': campus,
+      'teachers': teachers.map((item) => item.toJson()).toList(growable: false),
+      'teachingLanguage': teachingLanguage,
+      'arrangementInfo': arrangements
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'isExclusive': isExclusive,
+      'status': status,
+    };
   }
 
   final String code;
@@ -170,6 +220,10 @@ class TeacherInfo {
     );
   }
 
+  Map<String, Object?> toJson() {
+    return {'teacherName': teacherName, 'teacherCode': teacherCode};
+  }
+
   final String teacherName;
   final String teacherCode;
 }
@@ -186,21 +240,36 @@ class ArrangementInfo {
 
   factory ArrangementInfo.fromJson(Object? json) {
     final map = asJsonMap(json);
+    final arrangementText = readString(map['arrangementText']) ?? '';
+    final parsed = _ParsedArrangement.fromText(arrangementText);
     return ArrangementInfo(
-      arrangementText: readString(map['arrangementText']) ?? '',
-      occupyDay: readInt(map['occupyDay']) ?? 0,
-      occupyTime: (map['occupyTime'] is List ? map['occupyTime'] as List : [])
+      arrangementText: arrangementText,
+      occupyDay: readInt(map['occupyDay']) ?? parsed.occupyDay,
+      occupyTime: _readIntList(map['occupyTime'])
           .map(readInt)
           .whereType<int>()
           .where((slot) => slot >= 1 && slot <= 12)
-          .toList(growable: false),
-      occupyWeek: (map['occupyWeek'] is List ? map['occupyWeek'] as List : [])
+          .toList(growable: false)
+          .ifEmpty(parsed.occupyTime),
+      occupyWeek: _readIntList(map['occupyWeek'])
           .map(readInt)
           .whereType<int>()
-          .toList(growable: false),
-      occupyRoom: readString(map['occupyRoom']) ?? '',
+          .toList(growable: false)
+          .ifEmpty(parsed.occupyWeek),
+      occupyRoom: readString(map['occupyRoom']) ?? parsed.occupyRoom,
       teacherAndCode: readString(map['teacherAndCode']) ?? '',
     );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'arrangementText': arrangementText,
+      'occupyDay': occupyDay,
+      'occupyTime': occupyTime,
+      'occupyWeek': occupyWeek,
+      'occupyRoom': occupyRoom,
+      'teacherAndCode': teacherAndCode,
+    };
   }
 
   final String arrangementText;
@@ -209,11 +278,148 @@ class ArrangementInfo {
   final List<int> occupyWeek;
   final String occupyRoom;
   final String teacherAndCode;
+
+  bool occupies(int day, int slot) {
+    return occupyDay == day && occupyTime.contains(slot);
+  }
 }
 
 class ScheduledClass {
   const ScheduledClass({required this.course, required this.classInfo});
 
+  factory ScheduledClass.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return ScheduledClass(
+      course: SchedulerCourse.fromJson(map['course']),
+      classInfo: SchedulerClass.fromJson(map['classInfo']),
+    );
+  }
+
   final SchedulerCourse course;
   final SchedulerClass classInfo;
+
+  Map<String, Object?> toJson() {
+    return {'course': course.toJson(), 'classInfo': classInfo.toJson()};
+  }
+
+  bool occupies(int day, int slot) {
+    return classInfo.arrangements.any(
+      (arrangement) => arrangement.occupies(day, slot),
+    );
+  }
+}
+
+List<Object?> _readIntList(Object? value) {
+  if (value is List) return value;
+  if (value is String) {
+    return value
+        .split(RegExp(r'[,，\s]+'))
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const [];
+}
+
+class _ParsedArrangement {
+  const _ParsedArrangement({
+    required this.occupyDay,
+    required this.occupyTime,
+    required this.occupyWeek,
+    required this.occupyRoom,
+  });
+
+  factory _ParsedArrangement.fromText(String text) {
+    final day = _parseDay(text);
+    final time = _parseTime(text);
+    final week = _parseWeek(text);
+    return _ParsedArrangement(
+      occupyDay: day,
+      occupyTime: time,
+      occupyWeek: week,
+      occupyRoom: _parseRoom(text),
+    );
+  }
+
+  final int occupyDay;
+  final List<int> occupyTime;
+  final List<int> occupyWeek;
+  final String occupyRoom;
+}
+
+int _parseDay(String text) {
+  const days = {
+    '星期一': 1,
+    '周一': 1,
+    '星期二': 2,
+    '周二': 2,
+    '星期三': 3,
+    '周三': 3,
+    '星期四': 4,
+    '周四': 4,
+    '星期五': 5,
+    '周五': 5,
+    '星期六': 6,
+    '周六': 6,
+    '星期日': 7,
+    '星期天': 7,
+    '周日': 7,
+    '周天': 7,
+  };
+  for (final entry in days.entries) {
+    if (text.contains(entry.key)) return entry.value;
+  }
+  return 0;
+}
+
+List<int> _parseTime(String text) {
+  final match = RegExp(
+    r'(?:星期[一二三四五六日天]|周[一二三四五六日天])\s*(\d{1,2})(?:\s*[-~－]\s*(\d{1,2}))?\s*节',
+  ).firstMatch(text);
+  if (match == null) return const [];
+  final start = int.tryParse(match.group(1) ?? '');
+  final end = int.tryParse(match.group(2) ?? '') ?? start;
+  if (start == null || end == null || start < 1 || end < start) {
+    return const [];
+  }
+  return [for (var slot = start; slot <= end && slot <= 12; slot++) slot];
+}
+
+List<int> _parseWeek(String text) {
+  final match = RegExp(r'\[([^\]]+)\]').firstMatch(text);
+  if (match == null) return const [];
+  final raw = (match.group(1) ?? '').replaceAll('周', '').trim();
+  final weeks = <int>{};
+  for (final part in raw.split(RegExp(r'\s+'))) {
+    if (part.isEmpty) continue;
+    final isOdd = part.contains('单');
+    final isEven = part.contains('双');
+    final cleaned = part.replaceAll(RegExp(r'[单双()（）]'), '');
+    final range = cleaned.split('-');
+    if (range.length == 1) {
+      final week = int.tryParse(range.single);
+      if (week != null) weeks.add(week);
+      continue;
+    }
+    final start = int.tryParse(range.first);
+    final end = int.tryParse(range.last);
+    if (start == null || end == null || end < start) continue;
+    for (var week = start; week <= end; week++) {
+      if (isOdd && week.isEven) continue;
+      if (isEven && week.isOdd) continue;
+      weeks.add(week);
+    }
+  }
+  return weeks.toList(growable: false)..sort();
+}
+
+String _parseRoom(String text) {
+  final end = text.indexOf(']');
+  if (end < 0 || end + 1 >= text.length) return '';
+  return text.substring(end + 1).trim();
+}
+
+extension _ListFallback<T> on List<T> {
+  List<T> ifEmpty(List<T> fallback) {
+    return isEmpty ? fallback : this;
+  }
 }

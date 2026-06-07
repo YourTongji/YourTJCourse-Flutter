@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/ai_summary.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
+import '../../domain/repositories/review_repository.dart';
+import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
 import '../../shared/widgets/rating_stars.dart';
@@ -22,6 +25,13 @@ class CourseDetailView extends ConsumerWidget {
     );
 
     return Scaffold(
+      floatingActionButton: detail.hasValue
+          ? FloatingActionButton.extended(
+              onPressed: () => _showReviewSheet(context, ref, controller),
+              icon: const Icon(Icons.rate_review_outlined),
+              label: const Text('写评价'),
+            )
+          : null,
       body: detail.when(
         loading: () => const LoadingState(message: '正在加载课程详情'),
         error: (error, _) =>
@@ -68,6 +78,17 @@ class CourseDetailView extends ConsumerWidget {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        AiSummaryCard(
+                          summary: state.aiSummary,
+                          error: state.aiSummaryError,
+                          isLoading: state.isAiSummaryLoading,
+                          isExpanded: state.isAiSummaryExpanded,
+                          onToggle: controller.toggleAiSummaryExpanded,
+                          onLoad: () => controller.loadAiSummary(),
+                          onRefresh: () =>
+                              controller.loadAiSummary(refresh: true),
+                        ),
                       ],
                     ),
                   ),
@@ -164,6 +185,827 @@ class CourseDetailView extends ConsumerWidget {
       },
     );
   }
+
+  void _showReviewSheet(
+    BuildContext context,
+    WidgetRef ref,
+    CourseDetailController controller,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _ReviewComposeSheet(
+        controller: controller,
+        captchaRepository: ref.read(captchaRepositoryProvider),
+      ),
+    );
+  }
+}
+
+class _ReviewComposeSheet extends StatefulWidget {
+  const _ReviewComposeSheet({
+    required this.controller,
+    required this.captchaRepository,
+  });
+
+  final CourseDetailController controller;
+  final CaptchaRepository captchaRepository;
+
+  @override
+  State<_ReviewComposeSheet> createState() => _ReviewComposeSheetState();
+}
+
+class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
+  final _commentController = TextEditingController();
+  final _semesterController = TextEditingController();
+  final _nameController = TextEditingController();
+  int _rating = 0;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    _semesterController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final valid = _rating > 0 && _commentController.text.trim().isNotEmpty;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('写评价', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var star = 1; star <= 5; star++)
+                    IconButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => setState(() => _rating = star),
+                      icon: Icon(
+                        star <= _rating ? Icons.star : Icons.star_border,
+                        color: star <= _rating
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _commentController,
+                minLines: 5,
+                maxLines: 8,
+                maxLength: 10000,
+                decoration: const InputDecoration(
+                  labelText: '评价内容',
+                  alignLabelWithHint: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _semesterController,
+                decoration: const InputDecoration(
+                  labelText: '学期',
+                  hintText: '如 2025-2026-1，不填则为其他',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: '昵称（选填）'),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: valid && !_isSubmitting ? _submit : null,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.verified_user_outlined),
+                label: Text(_isSubmitting ? '提交中...' : '验证并提交'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final captchaToken = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) =>
+          _CaptchaSheet(captchaRepository: widget.captchaRepository),
+    );
+    if (captchaToken == null || captchaToken.isEmpty || !mounted) return;
+    setState(() => _isSubmitting = true);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await widget.controller.createReview(
+      rating: _rating,
+      comment: _commentController.text.trim(),
+      semester: _semesterController.text.trim().isEmpty
+          ? '其他'
+          : _semesterController.text.trim(),
+      captchaToken: captchaToken,
+      reviewerName: _nameController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    if (ok) {
+      navigator.pop();
+      messenger.showSnackBar(const SnackBar(content: Text('评价提交成功')));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('评价提交失败，请稍后重试')));
+  }
+}
+
+class _CaptchaSheet extends ConsumerStatefulWidget {
+  const _CaptchaSheet({required this.captchaRepository});
+
+  final CaptchaRepository captchaRepository;
+
+  @override
+  ConsumerState<_CaptchaSheet> createState() => _CaptchaSheetState();
+}
+
+class _CaptchaSheetState extends ConsumerState<_CaptchaSheet> {
+  CaptchaChallenge? _challenge;
+  final Set<int> _selected = {};
+  String? _message;
+  bool _loading = true;
+  bool _verifying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+      _selected.clear();
+    });
+    try {
+      final challenge = await widget.captchaRepository.fetchChallenge();
+      if (!mounted) return;
+      setState(() {
+        _challenge = challenge;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = '验证码加载失败，请重试';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final challenge = _challenge;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('YOURTJ 人机验证', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              challenge?.prompt ?? '请选择符合条件的图片',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            if (_loading)
+              const SizedBox(
+                height: 220,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (challenge == null)
+              SizedBox(
+                height: 140,
+                child: Center(child: Text(_message ?? '验证码不可用')),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                ),
+                itemCount: challenge.images.length,
+                itemBuilder: (context, index) {
+                  final selected = _selected.contains(index);
+                  return InkWell(
+                    onTap: _verifying
+                        ? null
+                        : () => setState(() {
+                            selected
+                                ? _selected.remove(index)
+                                : _selected.add(index);
+                          }),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            challenge.images[index],
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        if (selected)
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.38,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: theme.colorScheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            if (_message != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _message!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _loading || _verifying ? null : _load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('换一组'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: _verifying
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      challenge == null || _selected.isEmpty || _verifying
+                      ? null
+                      : _verify,
+                  child: Text(_verifying ? '验证中...' : '确认'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _verify() async {
+    final challenge = _challenge;
+    if (challenge == null) return;
+    setState(() {
+      _verifying = true;
+      _message = null;
+    });
+    try {
+      final response = await widget.captchaRepository.verify(
+        puzzleToken: challenge.puzzleToken,
+        selectedIndices: _selected.toList(growable: false)..sort(),
+      );
+      if (!mounted) return;
+      if (response.success && (response.token?.isNotEmpty ?? false)) {
+        Navigator.of(context).pop(response.token);
+        return;
+      }
+      setState(() {
+        _message = response.message ?? '验证失败，请重试';
+        _verifying = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = '网络错误，请重试';
+        _verifying = false;
+      });
+    }
+  }
+}
+
+class AiSummaryCard extends StatelessWidget {
+  const AiSummaryCard({
+    super.key,
+    required this.summary,
+    required this.error,
+    required this.isLoading,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.onLoad,
+    required this.onRefresh,
+  });
+
+  final AiSummaryData? summary;
+  final String? error;
+  final bool isLoading;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final VoidCallback onLoad;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final data = summary;
+    if (!isExpanded) {
+      return OutlinedButton(
+        onPressed: onToggle,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'AI 评课总结',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (data?.hasContent ?? false)
+              _ConsensusBadge(summary: data!)
+            else
+              Text(
+                '点击生成',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      );
+    }
+
+    return Card.filled(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('AI 评课总结', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                if (data?.hasContent ?? false)
+                  TextButton.icon(
+                    onPressed: isLoading ? null : onRefresh,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('刷新'),
+                  ),
+                IconButton(
+                  tooltip: '折叠',
+                  onPressed: onToggle,
+                  icon: const Icon(Icons.expand_less),
+                ),
+              ],
+            ),
+            if (isLoading)
+              const _AiSummarySkeleton()
+            else if (error != null && data == null)
+              _AiSummaryError(message: error!, onRetry: onLoad)
+            else if (data == null)
+              _AiSummaryIntro(onLoad: onLoad)
+            else if (!data.hasContent)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('当前评价数据不足，暂时无法生成稳定的 AI 总结。'),
+              )
+            else
+              _AiSummaryContent(summary: data),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSummaryIntro extends StatelessWidget {
+  const _AiSummaryIntro({required this.onLoad});
+
+  final VoidCallback onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          'AI 会综合学生评价整理课程特点。结果仅供快速浏览，具体判断仍建议阅读原始评价。',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: onLoad,
+          icon: const Icon(Icons.auto_awesome),
+          label: const Text('生成 AI 总结'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiSummaryError extends StatelessWidget {
+  const _AiSummaryError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'AI 总结生成失败：$message',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('重新尝试'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiSummarySkeleton extends StatefulWidget {
+  const _AiSummarySkeleton();
+
+  @override
+  State<_AiSummarySkeleton> createState() => _AiSummarySkeletonState();
+}
+
+class _AiSummarySkeletonState extends State<_AiSummarySkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final color = Color.lerp(
+          theme.colorScheme.primaryContainer.withValues(alpha: 0.24),
+          theme.colorScheme.primaryContainer.withValues(alpha: 0.62),
+          _controller.value,
+        )!;
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '正在思考',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _ThinkingDots(progress: _controller.value),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _SkeletonBar(width: 68, height: 24, color: color),
+                  _SkeletonBar(width: 96, height: 24, color: color),
+                  _SkeletonBar(width: 78, height: 24, color: color),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _SkeletonBlock(color: color)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _SkeletonBlock(color: color)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _SkeletonBar(width: double.infinity, height: 12, color: color),
+              const SizedBox(height: 7),
+              _SkeletonBar(width: 230, height: 12, color: color),
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'AI 正在分析学生评价，请稍候...',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ThinkingDots extends StatelessWidget {
+  const _ThinkingDots({required this.progress});
+
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return Row(
+      children: List.generate(3, (index) {
+        final value = ((progress + index / 3) % 1.0);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1.5),
+          child: Opacity(
+            opacity: 0.35 + value * 0.65,
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: const SizedBox(width: 5, height: 5),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  const _SkeletonBlock({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.54,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SkeletonBar(width: 46, height: 10, color: color),
+            const SizedBox(height: 8),
+            _SkeletonBar(width: double.infinity, height: 10, color: color),
+            const SizedBox(height: 7),
+            _SkeletonBar(width: 96, height: 10, color: color),
+            const SizedBox(height: 7),
+            _SkeletonBar(width: 68, height: 10, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({
+    required this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(height),
+      ),
+    );
+  }
+}
+
+class _AiSummaryContent extends StatelessWidget {
+  const _AiSummaryContent({required this.summary});
+
+  final AiSummaryData summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text('综合评价', style: theme.textTheme.labelMedium),
+        Text(
+          summary.ratingConsensus,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (summary.keywords.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final keyword in summary.keywords)
+                Chip(label: Text(keyword)),
+            ],
+          ),
+        ],
+        _SummaryPointList(
+          title: '优点',
+          icon: Icons.add_circle,
+          color: Colors.green,
+          items: summary.pros,
+        ),
+        _SummaryPointList(
+          title: '缺点',
+          icon: Icons.remove_circle,
+          color: Colors.orange,
+          items: summary.cons,
+        ),
+        if (summary.representative.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('代表评价', style: theme.textTheme.labelMedium),
+          const SizedBox(height: 6),
+          Text(
+            summary.representative.first.text,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ConsensusBadge extends StatelessWidget {
+  const _ConsensusBadge({required this.summary});
+
+  final AiSummaryData summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          summary.ratingConsensus,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryPointList extends StatelessWidget {
+  const _SummaryPointList({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.items,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.labelMedium),
+          const SizedBox(height: 6),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(item, style: theme.textTheme.bodySmall)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class ReviewCard extends StatelessWidget {
@@ -228,7 +1070,7 @@ class ReviewCard extends StatelessWidget {
             const SizedBox(height: 12),
             RatingStars(rating: review.rating.toDouble(), size: 14),
             const SizedBox(height: 8),
-            MarkdownBody(data: review.comment),
+            MarkdownBody(data: normalizeReviewMarkdown(review.comment)),
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: onLike,

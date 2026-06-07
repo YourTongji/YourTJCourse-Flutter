@@ -2,9 +2,31 @@ name: Android Test APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [dev, main, master]
+    paths:
+      - ".github/workflows/android-test.yml"
+      - "android/**"
+      - "assets/**"
+      - "lib/**"
+      - "test/**"
+      - "analysis_options.yaml"
+      - "pubspec.yaml"
+      - "pubspec.lock"
   pull_request:
+    branches: [dev, main, master]
+    paths:
+      - ".github/workflows/android-test.yml"
+      - "android/**"
+      - "assets/**"
+      - "lib/**"
+      - "test/**"
+      - "analysis_options.yaml"
+      - "pubspec.yaml"
+      - "pubspec.lock"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   android-test-apk:
@@ -32,6 +54,22 @@ jobs:
           CREDIT_API_BASE_URL=${{ secrets.CREDIT_API_BASE_URL || 'https://core.credit.yourtj.de' }}
           EOF
 
+      - name: Configure Android signing
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          {
+            printf '%s\n' 'storeFile=upload-keystore.jks'
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > android/key.properties
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -41,12 +79,24 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build release APKs
+        run: flutter build apk --release --split-per-abi --dart-define=APP_BUILD_SHA=$GITHUB_SHA
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: yourtjcourse-flutter-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: yourtjcourse-flutter-release-apks
+          path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
+
+      - name: Publish dev prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev-latest --cleanup-tag --yes || true
+          gh release create dev-latest build/app/outputs/flutter-apk/app-*-release.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "YourTJ Course Dev Latest" \
+            --notes "dev 分支自动预发行包。提交：$GITHUB_SHA"

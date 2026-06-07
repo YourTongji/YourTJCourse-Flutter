@@ -46,6 +46,9 @@ dependencies:
       ref: main
   shared_preferences: ^2.5.3
   uuid: ^4.5.1
+  url_launcher: ^6.3.2
+  share_plus: ^13.1.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

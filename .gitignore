@@ -49,3 +49,5 @@ app.*.map.json
 ClAUDE.md
 AGENTS.md
 .claude/
+/android/key.properties
+/android/app/*.jks

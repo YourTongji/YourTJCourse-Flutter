@@ -58,9 +58,9 @@ class CatalogState {
 }
 
 class CatalogController extends AsyncNotifier<CatalogState> {
-  late final CourseRepository _courseRepository;
-  late final SettingsRepository _settingsRepository;
-  late final CancelToken _cancelToken;
+  late CourseRepository _courseRepository;
+  late SettingsRepository _settingsRepository;
+  late CancelToken _cancelToken;
   Timer? _searchDebounce;
   int _page = 1;
 
@@ -71,23 +71,30 @@ class CatalogController extends AsyncNotifier<CatalogState> {
     _cancelToken = scopedCancelToken(ref);
     ref.onDispose(() => _searchDebounce?.cancel());
 
-    final departmentsFuture = _settingsRepository.getDepartments(
-      cancelToken: _cancelToken,
-    );
-    final coursesFuture = _courseRepository.getCourses(
-      page: _page,
-      includeTotal: true,
-      cancelToken: _cancelToken,
-    );
-    final results = await Future.wait([departmentsFuture, coursesFuture]);
-    final departments = results[0] as List<String>;
-    final courses = results[1] as dynamic;
-    return CatalogState(
-      departments: departments,
-      courses: courses.data as List<Course>,
-      hasMore: courses.hasMore as bool,
-      totalCount: courses.total as int?,
-    );
+    try {
+      final departmentsFuture = _settingsRepository.getDepartments(
+        cancelToken: _cancelToken,
+      );
+      final coursesFuture = _courseRepository.getCourses(
+        page: _page,
+        includeTotal: true,
+        cancelToken: _cancelToken,
+      );
+      final results = await Future.wait([departmentsFuture, coursesFuture]);
+      final departments = results[0] as List<String>;
+      final courses = results[1] as dynamic;
+      return CatalogState(
+        departments: departments,
+        courses: courses.data as List<Course>,
+        hasMore: courses.hasMore as bool,
+        totalCount: courses.total as int?,
+      );
+    } catch (error) {
+      if (isRequestCancellation(error)) {
+        return state.value ?? const CatalogState();
+      }
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {
@@ -118,9 +125,11 @@ class CatalogController extends AsyncNotifier<CatalogState> {
           isLoadingMore: false,
         ),
       );
-    } catch (error, stackTrace) {
-      if (error is DioException && CancelToken.isCancel(error)) return;
-      state = AsyncError<CatalogState>(error, stackTrace);
+    } catch (error) {
+      if (isRequestCancellation(error)) {
+        state = AsyncData(value.copyWith(isLoadingMore: false));
+        return;
+      }
       state = AsyncData(value.copyWith(isLoadingMore: false));
     }
   }
