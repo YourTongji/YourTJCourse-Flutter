@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "YourTJ Course HarmonyOS entry module",
+  "main": "",
+  "author": "YourTJ",
+  "license": "",
+  "dependencies": {}
+}

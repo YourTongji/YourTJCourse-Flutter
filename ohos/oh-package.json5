@@ -1,10 +1,14 @@
 {
-  "name": "entry",
+  "modelVersion": "5.1.0",
+  "name": "yourtjcourse_flutter",
   "version": "1.0.0",
-  "description": "YourTJ Course HarmonyOS",
+  "description": "YourTJ Course HarmonyOS client",
   "main": "",
+  "author": "YourTJ",
+  "license": "",
   "scripts": {},
-  "dependencies": {
-    "@ohos/flutter_ohos": "^3.35.8"
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.6"
   }
 }

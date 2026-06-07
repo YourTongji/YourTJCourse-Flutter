@@ -125,6 +125,18 @@ jobs:
           sed -i "s|$STD_FLUTTER|/opt/flutter_ohos|g" .dart_tool/package_config.json
           cat .dart_tool/package_config.json | grep flutter | head -3
 
+      - name: Normalize OHOS plugin metadata
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const file = '.flutter-plugins-dependencies';
+          const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+          data.plugins = data.plugins || {};
+          data.plugins.ohos = data.plugins.ohos || [];
+          fs.writeFileSync(file, JSON.stringify(data));
+          console.log(`OHOS native plugins: ${data.plugins.ohos.length}`);
+          EOF
+
       - name: Prepare HarmonyOS build commands
         run: |
           echo "registry=https://repo.harmonyos.com/npm/" > .npmrc
