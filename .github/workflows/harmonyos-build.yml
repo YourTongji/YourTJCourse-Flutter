@@ -190,6 +190,11 @@ jobs:
             /opt/flutter_ohos/packages/flutter_tools/hvigor/node_modules/@ohos/hvigor
           ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor-ohos-plugin" \
             /opt/flutter_ohos/packages/flutter_tools/hvigor/node_modules/@ohos/hvigor-ohos-plugin
+          mkdir -p ohos/node_modules/@ohos
+          ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor" \
+            ohos/node_modules/@ohos/hvigor
+          ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor-ohos-plugin" \
+            ohos/node_modules/@ohos/hvigor-ohos-plugin
           "$RUNNER_TEMP/harmonyos-bin/ohpm" --version
           test -f "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js"
 
