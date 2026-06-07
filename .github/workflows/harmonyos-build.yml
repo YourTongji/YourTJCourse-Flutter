@@ -65,9 +65,12 @@ jobs:
         run: flutter test
 
   # --- Job 2: OHOS Flutter Build (with OpenHarmony SDK) ---
+  # Note: 此阶段为实验性，需要手动配置 OHOS SDK 和证书
+  # 标准 CI（测试+分析）在 standard-ci 中已保证通过
   ohos-build:
     runs-on: ubuntu-latest
     needs: [standard-ci]
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -90,10 +93,8 @@ jobs:
           flutter --version 2>/dev/null || echo "Flutter OHOS not fully installed"
 
       - name: Setup HarmonyOS SDK
-        uses: applibgroup/setup-harmonyos-sdk@v1
+        uses: harmonyos-dev/setup-harmonyos-sdk@v1
         continue-on-error: true
-        with:
-          ohos-sdk: "11"
 
       - name: Create env file
         run: |
