@@ -1,0 +1,7 @@
+# OHOS 平台依赖覆盖配置
+# 在 OHOS Flutter SDK 环境下使用此配置替换主 pubspec.yaml
+# 用法: cp pubspec.ohos.yaml pubspec.yaml && flutter pub get
+
+dependency_overrides:
+  flutter_secure_storage_ohos: ^1.0.0
+  share_plus_harmonyos: ^1.0.0
