@@ -19,7 +19,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.12.1
+  # harmonyos 分支使用 flutter_flutter 3.35.x (Dart 3.9+)
+  # dev/main 分支使用标准 Flutter 3.x (Dart 3.12+)
+  sdk: ">=3.9.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
