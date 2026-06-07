@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -240,10 +241,10 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
   final _commentController = TextEditingController();
   final _nameController = TextEditingController();
   final _qqController = TextEditingController();
-  final _avatarController = TextEditingController();
   late String _semester;
   int _rating = 0;
   bool _showReviewer = false;
+  _ReviewerAvatarType _avatarType = _ReviewerAvatarType.random;
   bool _isSubmitting = false;
 
   @override
@@ -257,7 +258,6 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
     _commentController.dispose();
     _nameController.dispose();
     _qqController.dispose();
-    _avatarController.dispose();
     super.dispose();
   }
 
@@ -329,7 +329,7 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('显示点评人信息'),
-                subtitle: const Text('可填写昵称和头像，字段与网页版保持一致'),
+                subtitle: const Text('可填写昵称，并选择随机头像或 QQ 头像'),
                 value: _showReviewer,
                 onChanged: _isSubmitting
                     ? null
@@ -342,22 +342,79 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
                   decoration: const InputDecoration(labelText: '昵称'),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _qqController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'QQ 号（选填）',
-                    hintText: '填写后使用 QQ 头像',
-                  ),
+                SegmentedButton<_ReviewerAvatarType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _ReviewerAvatarType.random,
+                      label: Text('随机头像'),
+                      icon: Icon(Icons.auto_awesome_outlined),
+                    ),
+                    ButtonSegment(
+                      value: _ReviewerAvatarType.qq,
+                      label: Text('QQ头像'),
+                      icon: Icon(Icons.account_circle_outlined),
+                    ),
+                  ],
+                  selected: {_avatarType},
+                  onSelectionChanged: _isSubmitting
+                      ? null
+                      : (value) => setState(() => _avatarType = value.single),
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _avatarController,
-                  decoration: const InputDecoration(
-                    labelText: '头像链接（选填）',
-                    hintText: '优先使用头像链接，其次使用 QQ 头像',
-                  ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    ReviewAvatar(
+                      review: Review(
+                        id: 0,
+                        sqid: 'preview',
+                        courseId: widget.course.id,
+                        semester: _semester,
+                        rating: _rating,
+                        comment: _commentController.text,
+                        createdAt: DateTime.now().toIso8601String(),
+                        likeCount: 0,
+                        liked: false,
+                        reviewerName: _nameController.text.trim(),
+                        reviewerAvatar: _reviewerAvatar,
+                      ),
+                      size: 46,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _avatarType == _ReviewerAvatarType.qq
+                            ? '我们只保存头像链接，不会公开你的 QQ 号'
+                            : '随机头像按昵称生成，和网页版保持一致',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                if (_avatarType == _ReviewerAvatarType.qq) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _qqController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'QQ 号',
+                      hintText: '输入 QQ 号生成头像',
+                    ),
+                    onChanged: (value) {
+                      final digits = value.replaceAll(RegExp(r'\D'), '');
+                      if (digits != value) {
+                        _qqController.value = TextEditingValue(
+                          text: digits,
+                          selection: TextSelection.collapsed(
+                            offset: digits.length,
+                          ),
+                        );
+                      }
+                      setState(() {});
+                    },
+                  ),
+                ],
               ],
               const SizedBox(height: 14),
               FilledButton.icon(
@@ -409,13 +466,14 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
   }
 
   String? get _reviewerAvatar {
-    final direct = _avatarController.text.trim();
-    if (direct.isNotEmpty) return direct;
+    if (_avatarType != _ReviewerAvatarType.qq) return null;
     final qq = _qqController.text.trim();
     if (qq.isEmpty) return null;
-    return 'https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100';
+    return 'https://q1.qlogo.cn/g?b=qq&nk=$qq&s=640';
   }
 }
+
+enum _ReviewerAvatarType { random, qq }
 
 class _CaptchaSheet extends ConsumerStatefulWidget {
   const _CaptchaSheet({required this.captchaRepository});
@@ -1207,24 +1265,25 @@ class ReviewAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final avatar = review.reviewerAvatar?.trim() ?? '';
+    final seed = (review.reviewerName?.trim().isNotEmpty ?? false)
+        ? review.reviewerName!.trim()
+        : '评论长图-${review.id}';
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primaryContainer,
-            theme.colorScheme.tertiaryContainer,
-          ],
-        ),
       ),
-      child: Center(
-        child: Text(
-          (review.reviewerName?.isNotEmpty ?? false)
-              ? review.reviewerName!.characters.first
-              : '匿',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.onPrimaryContainer,
-            fontWeight: FontWeight.w900,
+      child: CustomPaint(
+        painter: _BeamAvatarPainter(seed: seed),
+        child: Center(
+          child: Text(
+            (review.reviewerName?.isNotEmpty ?? false)
+                ? review.reviewerName!.characters.first
+                : '',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
       ),
@@ -1245,68 +1304,224 @@ class ReviewAvatar extends StatelessWidget {
   }
 }
 
+class _BeamAvatarPainter extends CustomPainter {
+  const _BeamAvatarPainter({required this.seed});
+
+  static const _colors = [
+    Color(0xFF0F172A),
+    Color(0xFF38BDF8),
+    Color(0xFFF8FAFC),
+    Color(0xFFF59E0B),
+    Color(0xFF22C55E),
+  ];
+
+  final String seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final hash = seed.codeUnits.fold<int>(
+      0,
+      (value, unit) => (value * 31 + unit) & 0x7fffffff,
+    );
+    final basePaint = Paint()..color = _colors[hash % _colors.length];
+    canvas.drawRect(Offset.zero & size, basePaint);
+
+    for (var i = 0; i < 7; i++) {
+      final color = _colors[(hash + i * 7) % _colors.length];
+      final paint = Paint()
+        ..color = color.withValues(alpha: i.isEven ? 0.92 : 0.72);
+      final radius =
+          size.shortestSide * (0.18 + ((hash >> (i + 1)) % 18) / 100);
+      final dx = ((hash >> (i * 3)) % 100) / 100 * size.width;
+      final dy = ((hash >> (i * 4 + 1)) % 100) / 100 * size.height;
+      canvas.drawCircle(Offset(dx, dy), radius, paint);
+      canvas.drawCircle(Offset(size.width - dx, dy), radius * 0.82, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeamAvatarPainter oldDelegate) {
+    return oldDelegate.seed != seed;
+  }
+}
+
 Future<void> showReviewShareDialog(
   BuildContext context, {
   required CourseDetail course,
   required Review review,
 }) async {
-  final key = GlobalKey();
-  String? savedPath;
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('课程点评分享图'),
-        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-        content: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: RepaintBoundary(
-              key: key,
-              child: ReviewShareCard(course: course, review: review),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('关闭'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              savedPath = await saveReviewShareImage(key, course, review);
-              if (!context.mounted) return;
-              messenger.showSnackBar(SnackBar(content: Text('已保存：$savedPath')));
-            },
-            icon: const Icon(Icons.save_alt_outlined),
-            label: const Text('保存'),
-          ),
-          FilledButton.tonalIcon(
-            onPressed: () async {
-              final path =
-                  savedPath ?? await saveReviewShareImage(key, course, review);
-              await SharePlus.instance.share(
-                ShareParams(
-                  files: [XFile(path, mimeType: 'image/png')],
-                  text: '来自 YourTJ 选课社区的课程点评',
-                ),
-              );
-            },
-            icon: const Icon(Icons.ios_share_outlined),
-            label: const Text('分享'),
-          ),
-        ],
-      );
-    },
+    builder: (dialogContext) =>
+        _ReviewShareDialog(course: course, review: review),
   );
 }
 
-Future<String> saveReviewShareImage(
-  GlobalKey key,
-  CourseDetail course,
-  Review review,
-) async {
+class _ReviewShareDialog extends StatefulWidget {
+  const _ReviewShareDialog({required this.course, required this.review});
+
+  final CourseDetail course;
+  final Review review;
+
+  @override
+  State<_ReviewShareDialog> createState() => _ReviewShareDialogState();
+}
+
+class _ReviewShareDialogState extends State<_ReviewShareDialog> {
+  static const _platform = MethodChannel('de.yourtj.course.flutter/updater');
+
+  final _key = GlobalKey();
+  Uint8List? _pngBytes;
+  String? _message;
+  var _saving = false;
+  var _sharing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _generatePreview());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final png = _pngBytes;
+    return AlertDialog(
+      title: const Text('课程点评分享图'),
+      contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      content: SizedBox(
+        width: 340,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (png == null)
+              const SizedBox(
+                height: 260,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 520),
+                child: InteractiveViewer(
+                  minScale: 0.6,
+                  maxScale: 3,
+                  child: Image.memory(png, fit: BoxFit.contain),
+                ),
+              ),
+            Positioned(
+              left: -1200,
+              top: 0,
+              child: RepaintBoundary(
+                key: _key,
+                child: ReviewShareCard(
+                  course: widget.course,
+                  review: widget.review,
+                ),
+              ),
+            ),
+            if (_message != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(_message!, style: theme.textTheme.bodySmall),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+        FilledButton.icon(
+          onPressed: png == null || _saving ? null : _saveToGallery,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save_alt_outlined),
+          label: Text(_saving ? '保存中...' : '保存到相册'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: png == null || _sharing ? null : _shareImage,
+          icon: const Icon(Icons.ios_share_outlined),
+          label: const Text('分享'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _generatePreview() async {
+    try {
+      final avatarUrl = widget.review.reviewerAvatar?.trim() ?? '';
+      if (avatarUrl.startsWith('http')) {
+        await precacheImage(NetworkImage(avatarUrl), context);
+      }
+      final bytes = await renderReviewShareImage(_key);
+      if (!mounted) return;
+      setState(() => _pngBytes = bytes);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _message = '分享图生成失败：$error');
+    }
+  }
+
+  Future<void> _saveToGallery() async {
+    final bytes = _pngBytes;
+    if (bytes == null) return;
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await _platform.invokeMethod<String>('saveImageToGallery', {
+        'bytes': bytes,
+        'name': _shareFileName(widget.course, widget.review),
+      });
+      if (!mounted) return;
+      setState(() => _message = '已保存到系统相册');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _message = '保存失败：$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _shareImage() async {
+    final bytes = _pngBytes;
+    if (bytes == null) return;
+    setState(() => _sharing = true);
+    try {
+      final directory = await getTemporaryDirectory();
+      final file = File(
+        '${directory.path}/${_shareFileName(widget.course, widget.review)}',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'image/png')],
+          text: '来自 YourTJ 选课社区的课程点评',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+}
+
+Future<Uint8List> renderReviewShareImage(GlobalKey key) async {
   final boundary =
       key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
   if (boundary == null) throw StateError('分享图尚未渲染');
@@ -1314,11 +1529,16 @@ Future<String> saveReviewShareImage(
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   final data = bytes?.buffer.asUint8List();
   if (data == null) throw StateError('分享图生成失败');
-  final directory = await getApplicationDocumentsDirectory();
-  final safeCode = course.code.isEmpty ? 'yourtj' : course.code;
-  final file = File('${directory.path}/$safeCode-${review.sqid}.png');
-  await file.writeAsBytes(data, flush: true);
-  return file.path;
+  return data;
+}
+
+String _shareFileName(CourseDetail course, Review review) {
+  final safeCode = (course.code.isEmpty ? 'yourtj' : course.code).replaceAll(
+    RegExp(r'[^A-Za-z0-9._-]'),
+    '_',
+  );
+  final safeId = review.sqid.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  return '$safeCode-$safeId.png';
 }
 
 class ReviewShareCard extends StatelessWidget {

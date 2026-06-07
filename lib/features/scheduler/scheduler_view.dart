@@ -229,39 +229,57 @@ class _SchedulerSidebar extends StatelessWidget {
               collapsed: collapsed,
               onTap: onToggleCollapsed,
             ),
-            _SidebarButton(
-              item: sections[0],
-              selected: active == 0,
-              collapsed: collapsed,
-              onTap: () => onChange(0),
-            ),
-            _SidebarButton(
-              item: LkcnCategoryItem(
-                text: '候选',
-                icon: Icons.playlist_add_outlined,
-                tag: state.majorCourses.isEmpty
-                    ? null
-                    : _compactCount(state.majorCourses.length),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: _SidebarButton(
+                      key: const ValueKey('scheduler-sidebar-filter'),
+                      item: sections[0],
+                      selected: active == 0,
+                      collapsed: collapsed,
+                      onTap: () => onChange(0),
+                    ),
+                  ),
+                  Expanded(
+                    child: _SidebarButton(
+                      key: const ValueKey('scheduler-sidebar-candidates'),
+                      item: LkcnCategoryItem(
+                        text: '候选',
+                        icon: Icons.playlist_add_outlined,
+                        tag: state.majorCourses.isEmpty
+                            ? null
+                            : _compactCount(state.majorCourses.length),
+                      ),
+                      selected: active == 1,
+                      collapsed: collapsed,
+                      onTap: () => onChange(1),
+                    ),
+                  ),
+                  Expanded(
+                    child: _SidebarButton(
+                      key: const ValueKey('scheduler-sidebar-selected'),
+                      item: LkcnCategoryItem(
+                        text: '已选',
+                        icon: Icons.done_all_outlined,
+                        dot: state.selected.isNotEmpty,
+                      ),
+                      selected: active == 2,
+                      collapsed: collapsed,
+                      onTap: () => onChange(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: _SidebarButton(
+                      key: const ValueKey('scheduler-sidebar-timetable'),
+                      item: sections[3],
+                      selected: active == 3,
+                      collapsed: collapsed,
+                      onTap: () => onChange(3),
+                    ),
+                  ),
+                ],
               ),
-              selected: active == 1,
-              collapsed: collapsed,
-              onTap: () => onChange(1),
-            ),
-            _SidebarButton(
-              item: LkcnCategoryItem(
-                text: '已选',
-                icon: Icons.done_all_outlined,
-                dot: state.selected.isNotEmpty,
-              ),
-              selected: active == 2,
-              collapsed: collapsed,
-              onTap: () => onChange(2),
-            ),
-            _SidebarButton(
-              item: sections[3],
-              selected: active == 3,
-              collapsed: collapsed,
-              onTap: () => onChange(3),
             ),
           ],
         ),
@@ -314,6 +332,7 @@ class _SidebarCollapseButton extends StatelessWidget {
 
 class _SidebarButton extends StatelessWidget {
   const _SidebarButton({
+    super.key,
     required this.item,
     required this.selected,
     required this.collapsed,
@@ -328,40 +347,90 @@ class _SidebarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: selected ? null : onTap,
-      child: ColoredBox(
-        color: selected ? scheme.surface : Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: collapsed ? 12 : 14),
-          child: Row(
-            children: [
-              DecoratedBox(
+    final icon = item.icon is IconData
+        ? item.icon! as IconData
+        : Icons.circle_outlined;
+    final iconWithBadge = SizedBox.square(
+      dimension: 32,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 21,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
+          ),
+          if (item.tag != null)
+            Positioned(
+              right: -7,
+              top: -3,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: selected ? scheme.primary : Colors.transparent,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(3),
+                  color: scheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  child: Text(
+                    item.tag!,
+                    style: TextStyle(
+                      color: scheme.onPrimary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-                child: const SizedBox(width: 3, height: 18),
               ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Icon(
-                      item.icon is IconData
-                          ? item.icon! as IconData
-                          : Icons.circle_outlined,
-                      size: 21,
-                      color: selected
-                          ? scheme.primary
-                          : scheme.onSurfaceVariant,
+            ),
+          if (item.dot)
+            Positioned(
+              right: -2,
+              top: -1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.error,
+                  shape: BoxShape.circle,
+                ),
+                child: const SizedBox(width: 7, height: 7),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    return Tooltip(
+      message: item.text,
+      child: Semantics(
+        button: true,
+        label: item.text,
+        selected: selected,
+        child: InkWell(
+          onTap: selected ? null : onTap,
+          child: ColoredBox(
+            color: selected ? scheme.surface : Colors.transparent,
+            child: Center(
+              child: Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: selected ? scheme.primary : Colors.transparent,
+                      borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(3),
+                      ),
                     ),
-                    if (!collapsed) const SizedBox(height: 5),
-                    Stack(
-                      clipBehavior: Clip.none,
+                    child: const SizedBox(width: 3, height: 18),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (!collapsed)
+                        iconWithBadge,
+                        if (!collapsed) ...[
+                          const SizedBox(height: 5),
                           Text(
                             item.text,
                             textAlign: TextAlign.center,
@@ -375,49 +444,13 @@ class _SidebarButton extends StatelessWidget {
                                   : scheme.onSurfaceVariant,
                             ),
                           ),
-                        if (item.tag != null)
-                          Positioned(
-                            right: collapsed ? -12 : -25,
-                            top: collapsed ? -24 : -9,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: scheme.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 1,
-                                ),
-                                child: Text(
-                                  item.tag!,
-                                  style: TextStyle(
-                                    color: scheme.onPrimary,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (item.dot)
-                          Positioned(
-                            right: collapsed ? -9 : -8,
-                            top: collapsed ? -20 : -3,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: scheme.error,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const SizedBox(width: 7, height: 7),
-                            ),
-                          ),
+                        ],
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

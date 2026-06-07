@@ -8,16 +8,17 @@ class RatingStars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final color = Theme.of(context).colorScheme.tertiary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final value = index + 1;
-        return Icon(
-          rating >= value ? Icons.star_rounded : Icons.star_border_rounded,
-          size: size,
-          color: color,
-        );
+        final icon = rating >= value
+            ? Icons.star_rounded
+            : rating >= value - 0.5
+            ? Icons.star_half_rounded
+            : Icons.star_border_rounded;
+        return Icon(icon, size: size, color: color);
       }),
     );
   }

@@ -114,6 +114,54 @@ void main() {
     expect(find.text('工程伦理'), findsOneWidget);
     expect(find.text('查询结果 · 1 门'), findsOneWidget);
   });
+
+  testWidgets('keeps all scheduler sidebar actions visible when collapsed', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues({
+      'flutter.de.yourtj.course.scheduler.selected': jsonEncode([
+        ScheduledClass(
+          course: _visibleCourse,
+          classInfo: _visibleClass,
+        ).toJson(),
+      ]),
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _VisualSchedulerRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: SchedulerView()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.byTooltip('折叠侧栏'));
+    await tester.pumpAndSettle();
+
+    final keys = [
+      const ValueKey('scheduler-sidebar-filter'),
+      const ValueKey('scheduler-sidebar-candidates'),
+      const ValueKey('scheduler-sidebar-selected'),
+      const ValueKey('scheduler-sidebar-timetable'),
+    ];
+
+    for (final key in keys) {
+      final finder = find.byKey(key);
+      expect(finder, findsOneWidget);
+      final rect = tester.getRect(finder);
+      expect(rect.width, greaterThan(40));
+      expect(rect.height, greaterThan(90));
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(568));
+    }
+  });
 }
 
 class _NoAnnouncementController extends AnnouncementController {
