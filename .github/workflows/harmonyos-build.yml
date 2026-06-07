@@ -29,9 +29,8 @@ permissions:
   contents: write
 
 env:
-  # Finn-Technologies/flutter 3.41.9 基于较新 Flutter，含 Dart 3.10+
-  FLUTTER_OHOS_REPO: https://github.com/Finn-Technologies/flutter.git
-  FLUTTER_OHOS_VERSION: main
+  FLUTTER_OHOS_REPO: https://gitcode.com/openharmony-tpc/flutter_flutter.git
+  FLUTTER_OHOS_VERSION: oh-3.41.9-dev
 
 jobs:
   # --- Job 1: Standard Flutter CI (standard SDK: analyze + test) ---
