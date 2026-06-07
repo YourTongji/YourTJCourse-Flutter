@@ -3,6 +3,7 @@ import 'package:yourtjcourse_flutter/domain/models/ai_summary.dart';
 import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
 import 'package:yourtjcourse_flutter/domain/models/runtime_state.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
+import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
 
 void main() {
   test('decodes backend course detail compatibility fields', () {
@@ -144,5 +145,57 @@ void main() {
     expect(restored.classInfo.code, '00303001');
     expect(restored.classInfo.teachers.single.teacherName, '林老师');
     expect(restored.classInfo.arrangements.single.occupyDay, 2);
+  });
+
+  test('parses scheduler arrangement text for timetable placement', () {
+    final scheduled = ScheduledClass(
+      course: SchedulerCourse.fromJson({
+        'courseCode': '010168',
+        'courseName': '会计学',
+        'faculty': '经济与管理学院',
+        'credit': 3,
+        'courses': const [],
+      }),
+      classInfo: SchedulerClass.fromJson({
+        'code': '01016801',
+        'campus': '四平路校区',
+        'teachers': [
+          {'teacherCode': '94767', 'teacherName': '张延洁'},
+        ],
+        'arrangementInfo': [
+          {'arrangementText': '星期三5-6节 [1-16] 南208'},
+          {'arrangementText': '星期五1-2节 [1-15单] 南208'},
+        ],
+      }),
+    );
+
+    expect(scheduled.classInfo.arrangements.first.occupyDay, 3);
+    expect(scheduled.classInfo.arrangements.first.occupyTime, [5, 6]);
+    expect(scheduled.classInfo.arrangements.first.occupyRoom, '南208');
+    expect(scheduled.occupies(3, 5), isTrue);
+    expect(scheduled.occupies(5, 2), isTrue);
+    expect(scheduled.occupies(4, 5), isFalse);
+  });
+
+  test('merges duplicated optional course types by display name', () {
+    final merged = mergeOptionalCourseTypes(const [
+      OptionalCourseType(courseLabelId: 1022, courseLabelName: '科学探索与生命关怀'),
+      OptionalCourseType(courseLabelId: 1019, courseLabelName: '人文经典与审美素养'),
+      OptionalCourseType(courseLabelId: 958, courseLabelName: '科学探索与生命关怀'),
+      OptionalCourseType(courseLabelId: 957, courseLabelName: '社会发展与国际视野'),
+      OptionalCourseType(courseLabelId: 956, courseLabelName: '工程能力与创新思维'),
+      OptionalCourseType(courseLabelId: 955, courseLabelName: '人文经典与审美素养'),
+      OptionalCourseType(courseLabelId: 947, courseLabelName: '通识选修课'),
+    ]);
+
+    expect(merged.map((item) => item.courseLabelName), [
+      '科学探索与生命关怀',
+      '人文经典与审美素养',
+      '社会发展与国际视野',
+      '工程能力与创新思维',
+      '通识选修课',
+    ]);
+    expect(merged.first.effectiveCourseLabelIds, [958, 1022]);
+    expect(merged[1].effectiveCourseLabelIds, [955, 1019]);
   });
 }

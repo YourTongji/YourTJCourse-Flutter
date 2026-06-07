@@ -138,7 +138,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         ),
       ]);
       final grades = results[0] as List<int>;
-      final selected = await _restoreSelectedClasses();
+      final selected = await _restoreSelectedClasses(calendarId);
       return SchedulerState(
         calendars: calendars,
         selectedCalendarId: calendarId,
@@ -312,11 +312,16 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
-  void toggleOptionalType(int courseLabelId) {
+  void toggleOptionalType(List<int> courseLabelIds) {
     final current = state.value ?? const SchedulerState();
+    final ids = courseLabelIds.where((id) => id > 0).toSet();
+    if (ids.isEmpty) return;
     final selected = {...current.selectedOptionalTypeIds};
-    if (!selected.add(courseLabelId)) {
-      selected.remove(courseLabelId);
+    final shouldRemove = ids.every(selected.contains);
+    if (shouldRemove) {
+      selected.removeAll(ids);
+    } else {
+      selected.addAll(ids);
     }
     state = AsyncData(
       current.copyWith(
@@ -466,12 +471,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     final current = state.value;
     if (current == null) return null;
     for (final item in current.selected) {
-      for (final arrangement in item.classInfo.arrangements) {
-        if (arrangement.occupyDay == day &&
-            arrangement.occupyTime.contains(slot)) {
-          return item;
-        }
-      }
+      if (item.occupies(day, slot)) return item;
     }
     return null;
   }
@@ -486,7 +486,10 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         for (final right in candidate.arrangements) {
           final sameDay = left.occupyDay == right.occupyDay;
           final sameSlot = left.occupyTime.any(right.occupyTime.contains);
-          final sameWeek = left.occupyWeek.any(right.occupyWeek.contains);
+          final sameWeek =
+              left.occupyWeek.isEmpty ||
+              right.occupyWeek.isEmpty ||
+              left.occupyWeek.any(right.occupyWeek.contains);
           if (sameDay && sameSlot && sameWeek) return existing;
         }
       }
@@ -503,17 +506,84 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     return strip(left) == strip(right);
   }
 
-  Future<List<ScheduledClass>> _restoreSelectedClasses() async {
+  Future<List<ScheduledClass>> _restoreSelectedClasses(int calendarId) async {
     try {
       final preferences = await SharedPreferences.getInstance();
       final raw = preferences.getString(_selectedStorageKey);
       if (raw == null || raw.isEmpty) return const [];
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
-      return decoded.map(ScheduledClass.fromJson).toList(growable: false);
+      final selected = decoded
+          .map(ScheduledClass.fromJson)
+          .toList(growable: false);
+      return _rehydrateSelectedClasses(calendarId, selected);
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<List<ScheduledClass>> _rehydrateSelectedClasses(
+    int calendarId,
+    List<ScheduledClass> selected,
+  ) async {
+    var changed = false;
+    final hydrated = <ScheduledClass>[];
+    for (final item in selected) {
+      if (_hasUsableSchedule(item.classInfo)) {
+        hydrated.add(item);
+        continue;
+      }
+      final localClass = _matchingClass(item.course.classes, item.classInfo);
+      if (localClass != null && _hasUsableSchedule(localClass)) {
+        hydrated.add(
+          ScheduledClass(course: item.course, classInfo: localClass),
+        );
+        changed = true;
+        continue;
+      }
+      try {
+        final remoteClasses = await _repository.findCourseDetailByCode(
+          calendarId: calendarId,
+          courseCode: item.course.courseCode,
+          cancelToken: _cancelToken,
+        );
+        final remoteClass = _matchingClass(remoteClasses, item.classInfo);
+        if (remoteClass != null && _hasUsableSchedule(remoteClass)) {
+          hydrated.add(
+            ScheduledClass(
+              course: item.course.copyWith(classes: remoteClasses),
+              classInfo: remoteClass,
+            ),
+          );
+          changed = true;
+          continue;
+        }
+      } catch (_) {
+        // 恢复本地课表时不要因为单门课程补详情失败而丢掉其他已选记录。
+      }
+      hydrated.add(item);
+    }
+    if (changed) await _persistSelectedClasses(hydrated);
+    return hydrated;
+  }
+
+  SchedulerClass? _matchingClass(
+    List<SchedulerClass> classes,
+    SchedulerClass target,
+  ) {
+    for (final classInfo in classes) {
+      if (classInfo.code == target.code) return classInfo;
+    }
+    return null;
+  }
+
+  bool _hasUsableSchedule(SchedulerClass classInfo) {
+    return classInfo.arrangements.any(
+      (arrangement) =>
+          arrangement.occupyDay >= 1 &&
+          arrangement.occupyDay <= 7 &&
+          arrangement.occupyTime.isNotEmpty,
+    );
   }
 
   Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {

@@ -83,10 +83,12 @@ class SchedulerRepository {
       '/api/findOptionalCourseType',
       body: {'calendarId': calendarId},
       cancelToken: cancelToken,
-      decode: (json) => _unwrapList(json)
-          .map(OptionalCourseType.fromJson)
-          .where((item) => item.courseLabelId > 0)
-          .toList(growable: false),
+      decode: (json) => mergeOptionalCourseTypes(
+        _unwrapList(json)
+            .map(OptionalCourseType.fromJson)
+            .where((item) => item.courseLabelId > 0)
+            .toList(growable: false),
+      ),
     );
   }
 
@@ -206,4 +208,25 @@ class SchedulerRepository {
     if (data is List) return data;
     return const [];
   }
+}
+
+List<OptionalCourseType> mergeOptionalCourseTypes(
+  List<OptionalCourseType> types,
+) {
+  final grouped = <String, List<int>>{};
+  for (final type in types) {
+    final name = type.courseLabelName.trim();
+    if (name.isEmpty) continue;
+    grouped.putIfAbsent(name, () => []).addAll(type.effectiveCourseLabelIds);
+  }
+  return grouped.entries
+      .map((entry) {
+        final ids = entry.value.toSet().toList(growable: false)..sort();
+        return OptionalCourseType(
+          courseLabelId: ids.first,
+          courseLabelName: entry.key,
+          courseLabelIds: ids,
+        );
+      })
+      .toList(growable: false);
 }

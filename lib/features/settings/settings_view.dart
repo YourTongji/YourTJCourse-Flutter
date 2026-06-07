@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../domain/repositories/settings_repository.dart';
@@ -250,8 +254,369 @@ class SettingsView extends ConsumerWidget {
       applicationName: 'YourTJ Course',
       applicationVersion: '0.0.1',
       applicationIcon: Image.asset('assets/images/app_logo.png', width: 56),
-      children: const [Text('同济大学选课社区 Flutter Android 测试客户端。')],
+      children: [
+        const Text('同济大学选课社区 Flutter Android 测试客户端。'),
+        const SizedBox(height: 12),
+        _ReleaseUpdateChecker(openLink: _openLink),
+      ],
     );
+  }
+}
+
+enum _ReleaseChannel {
+  stable('正式版', 'latest'),
+  testing('测试版', 'dev-latest');
+
+  const _ReleaseChannel(this.label, this.tag);
+
+  final String label;
+  final String tag;
+}
+
+class _ReleaseUpdateChecker extends StatefulWidget {
+  const _ReleaseUpdateChecker({required this.openLink});
+
+  final Future<void> Function(BuildContext, String) openLink;
+
+  @override
+  State<_ReleaseUpdateChecker> createState() => _ReleaseUpdateCheckerState();
+}
+
+class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
+  static const _repo = 'YourTongji/YourTJCourse-Flutter';
+  static const _githubBase = 'https://github.com/$_repo';
+  static const _apiBase = 'https://api.github.com/repos/$_repo';
+  static const _platform = MethodChannel('de.yourtj.course.flutter/updater');
+  static const _downloadMirrors = [
+    'https://gh-proxy.com/',
+    'https://gh.llkk.cc/',
+    'https://gh-proxy.net/',
+    'https://hub.gitmirror.com/',
+  ];
+
+  final _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 12),
+      headers: const {'Accept': 'application/vnd.github+json'},
+    ),
+  );
+
+  _ReleaseChannel _channel = _ReleaseChannel.testing;
+  _ReleaseInfo? _release;
+  _ReleaseAsset? _recommendedAsset;
+  List<String> _supportedAbis = const [];
+  var _checking = false;
+  var _downloading = false;
+  var _downloadProgress = 0.0;
+  String? _message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final release = _release;
+    final asset = _recommendedAsset;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<_ReleaseChannel>(
+          segments: const [
+            ButtonSegment(
+              value: _ReleaseChannel.stable,
+              label: Text('正式版'),
+              icon: Icon(Icons.verified_outlined),
+            ),
+            ButtonSegment(
+              value: _ReleaseChannel.testing,
+              label: Text('测试版'),
+              icon: Icon(Icons.science_outlined),
+            ),
+          ],
+          selected: {_channel},
+          onSelectionChanged: _checking || _downloading
+              ? null
+              : (value) => setState(() {
+                  _channel = value.single;
+                  _release = null;
+                  _message = null;
+                }),
+        ),
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: _checking || _downloading ? null : _checkRelease,
+          icon: _checking
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.system_update_alt_outlined),
+          label: Text(_checking ? '检查中...' : '检查更新'),
+        ),
+        if (_downloading) ...[
+          const SizedBox(height: 10),
+          LinearProgressIndicator(value: _downloadProgress),
+          const SizedBox(height: 6),
+          Text(
+            '正在下载 ${(_downloadProgress * 100).clamp(0, 100).toStringAsFixed(0)}%',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (_message != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _message!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (release != null) ...[
+          const SizedBox(height: 10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '${release.name} · ${release.tagName}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _supportedAbis.isEmpty
+                        ? '未读取到本机 CPU 架构，已按通用顺序匹配安装包'
+                        : '本机 CPU：${_supportedAbis.join('、')}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (asset == null)
+                    Text(
+                      '没有找到适配当前设备的 APK。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                      ),
+                    )
+                  else ...[
+                    Text('将下载：${asset.name}', style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: _downloading ? null : () => _download(asset),
+                      icon: const Icon(Icons.download_for_offline_outlined),
+                      label: const Text('确认更新'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _checkRelease() async {
+    setState(() {
+      _checking = true;
+      _message = null;
+      _release = null;
+      _recommendedAsset = null;
+      _supportedAbis = const [];
+    });
+    try {
+      final supportedAbis = await _readSupportedAbis();
+      final response = await _dio.get<Object?>(
+        '$_apiBase/releases/tags/${_channel.tag}',
+      );
+      final release = _ReleaseInfo.fromJson(response.data);
+      final recommendedAsset = release.findBestAsset(supportedAbis);
+      if (!mounted) return;
+      setState(() {
+        _supportedAbis = supportedAbis;
+        _release = release;
+        _recommendedAsset = recommendedAsset;
+        _message = release.apkAssets.isEmpty
+            ? '${_channel.label}没有可下载的 APK'
+            : recommendedAsset == null
+            ? '已找到${_channel.label}，但没有匹配当前 CPU 架构的 APK'
+            : '已找到${_channel.label}，已自动匹配安装包。';
+      });
+    } on DioException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error.response?.statusCode == 404
+            ? '暂未发布${_channel.label}安装包'
+            : '检查失败，请稍后重试';
+      });
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  Future<List<String>> _readSupportedAbis() async {
+    if (!Platform.isAndroid) return const [];
+    try {
+      final result = await _platform.invokeListMethod<String>(
+        'getSupportedAbis',
+      );
+      return result ?? const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+
+  Future<void> _download(_ReleaseAsset asset) async {
+    if (!Platform.isAndroid) {
+      await widget.openLink(context, asset.browserDownloadUrl);
+      return;
+    }
+    setState(() {
+      _downloading = true;
+      _downloadProgress = 0;
+      _message = '正在准备下载...';
+    });
+
+    try {
+      final file = await _downloadTargetFile(asset.name);
+      DioException? lastError;
+      for (final url in _downloadCandidates(asset.browserDownloadUrl)) {
+        try {
+          await _dio.download(
+            url,
+            file.path,
+            deleteOnError: true,
+            onReceiveProgress: (received, total) {
+              if (!mounted || total <= 0) return;
+              setState(() => _downloadProgress = received / total);
+            },
+          );
+          await _installApk(file.path);
+          if (!mounted) return;
+          setState(() {
+            _message = '下载完成，请按系统提示安装。';
+            _downloadProgress = 1;
+          });
+          return;
+        } on DioException catch (error) {
+          lastError = error;
+          continue;
+        } on PlatformException catch (error) {
+          if (!mounted) return;
+          setState(() => _message = error.message ?? '无法启动系统安装器');
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      final officialUrl = asset.browserDownloadUrl;
+      await Clipboard.setData(ClipboardData(text: officialUrl));
+      if (!mounted) return;
+      setState(() {
+        _message = lastError?.message == null
+            ? '下载失败，已复制官方下载地址'
+            : '下载失败，已复制官方下载地址';
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('下载失败，已复制官方下载地址')));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  Future<File> _downloadTargetFile(String assetName) async {
+    final directory = await getTemporaryDirectory();
+    final safeName = assetName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return File('${directory.path}/$safeName');
+  }
+
+  Future<void> _installApk(String path) async {
+    await _platform.invokeMethod<void>('installApk', {'path': path});
+  }
+
+  List<String> _downloadCandidates(String url) {
+    final normalized = url.startsWith(_githubBase) ? url : url.trim();
+    return [
+      for (final mirror in _downloadMirrors) '$mirror$normalized',
+      normalized,
+    ];
+  }
+}
+
+class _ReleaseInfo {
+  const _ReleaseInfo({
+    required this.tagName,
+    required this.name,
+    required this.apkAssets,
+  });
+
+  factory _ReleaseInfo.fromJson(Object? json) {
+    final map = json is Map ? Map<String, Object?>.from(json) : const {};
+    final assetsRaw = map['assets'];
+    final assets = assetsRaw is List
+        ? assetsRaw
+              .map(_ReleaseAsset.fromJson)
+              .where((asset) => asset.name.endsWith('.apk'))
+              .toList(growable: false)
+        : const <_ReleaseAsset>[];
+    return _ReleaseInfo(
+      tagName: '${map['tag_name'] ?? ''}',
+      name: '${map['name'] ?? 'YourTJ Course'}',
+      apkAssets: assets,
+    );
+  }
+
+  final String tagName;
+  final String name;
+  final List<_ReleaseAsset> apkAssets;
+
+  _ReleaseAsset? findBestAsset(List<String> supportedAbis) {
+    final preferredAbis = supportedAbis.isEmpty
+        ? const ['arm64-v8a', 'armeabi-v7a', 'x86_64']
+        : supportedAbis;
+    for (final abi in preferredAbis) {
+      for (final asset in apkAssets) {
+        if (asset.abi == abi) return asset;
+      }
+    }
+    if (apkAssets.length == 1) return apkAssets.single;
+    return null;
+  }
+}
+
+class _ReleaseAsset {
+  const _ReleaseAsset({required this.name, required this.browserDownloadUrl});
+
+  factory _ReleaseAsset.fromJson(Object? json) {
+    final map = json is Map ? Map<String, Object?>.from(json) : const {};
+    return _ReleaseAsset(
+      name: '${map['name'] ?? ''}',
+      browserDownloadUrl: '${map['browser_download_url'] ?? ''}',
+    );
+  }
+
+  final String name;
+  final String browserDownloadUrl;
+
+  String? get abi {
+    final lowerName = name.toLowerCase();
+    if (lowerName.contains('arm64-v8a')) return 'arm64-v8a';
+    if (lowerName.contains('armeabi-v7a')) return 'armeabi-v7a';
+    if (lowerName.contains('x86_64')) return 'x86_64';
+    if (lowerName.contains('x86')) return 'x86';
+    return null;
   }
 }
 
