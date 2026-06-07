@@ -343,7 +343,7 @@ class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
   _ReleaseChannel _channel = _ReleaseChannel.testing;
   _ReleaseInfo? _release;
   _ReleaseAsset? _recommendedAsset;
-  List<String> _supportedAbis = const [];
+  var _currentRelease = false;
   var _checking = false;
   var _downloading = false;
   var _downloadProgress = 0.0;
@@ -430,21 +430,14 @@ class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _supportedAbis.isEmpty
-                        ? '未读取到本机 CPU 架构，已按通用顺序匹配安装包'
-                        : '本机 CPU：${_supportedAbis.join('、')}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
                   const SizedBox(height: 8),
                   if (asset == null)
                     Text(
-                      '没有找到适配当前设备的 APK。',
+                      _currentRelease ? '当前已经是最新版本' : '未找到适配当前设备的 APK。',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.error,
+                        color: _currentRelease
+                            ? scheme.onSurfaceVariant
+                            : scheme.error,
                       ),
                     )
                   else ...[
@@ -471,7 +464,7 @@ class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
       _message = null;
       _release = null;
       _recommendedAsset = null;
-      _supportedAbis = const [];
+      _currentRelease = false;
     });
     try {
       final supportedAbis = await _readSupportedAbis();
@@ -487,11 +480,11 @@ class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
       final recommendedAsset = release.findBestAsset(supportedAbis);
       if (!mounted) return;
       setState(() {
-        _supportedAbis = supportedAbis;
         _release = release;
+        _currentRelease = isCurrentBuild;
         _recommendedAsset = isCurrentBuild ? null : recommendedAsset;
         _message = isCurrentBuild
-            ? '当前已是${_channel.label}最新构建。'
+            ? '当前已经是最新版本'
             : release.apkAssets.isEmpty
             ? '${_channel.label}没有可下载的 APK'
             : recommendedAsset == null

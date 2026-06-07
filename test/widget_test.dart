@@ -85,6 +85,34 @@ void main() {
       matchesGoldenFile('goldens/scheduler_course_cell.png'),
     );
   });
+
+  testWidgets('looks up courses from an empty timetable slot', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _VisualSchedulerRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [schedulerRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: SchedulerView()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('课表'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byKey(const ValueKey('scheduler-cell-3-5')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(repository.lastLookupDay, 3);
+    expect(repository.lastLookupSection, 3);
+    expect(find.text('时间段查课 · 1'), findsOneWidget);
+    expect(find.text('工程伦理'), findsOneWidget);
+    expect(find.text('查询结果 · 1 门'), findsOneWidget);
+  });
 }
 
 class _NoAnnouncementController extends AnnouncementController {
@@ -122,6 +150,9 @@ const _visibleClass = SchedulerClass(
 class _VisualSchedulerRepository extends SchedulerRepository {
   _VisualSchedulerRepository() : super(ApiClient(Dio()));
 
+  int? lastLookupDay;
+  int? lastLookupSection;
+
   @override
   Future<List<CalendarTerm>> getAllCalendar({CancelToken? cancelToken}) async {
     return const [
@@ -144,4 +175,26 @@ class _VisualSchedulerRepository extends SchedulerRepository {
   }) async {
     return const [];
   }
+
+  @override
+  Future<List<SchedulerCourse>> findCourseByTime({
+    required int calendarId,
+    required int day,
+    required int section,
+    CancelToken? cancelToken,
+  }) async {
+    lastLookupDay = day;
+    lastLookupSection = section;
+    return const [_timeLookupCourse];
+  }
 }
+
+const _timeLookupCourse = SchedulerCourse(
+  courseCode: 'ETH001',
+  courseName: '工程伦理',
+  credit: 2,
+  faculty: '马克思主义学院',
+  courseNature: ['通识选修'],
+  campus: ['四平路'],
+  classes: [],
+);

@@ -159,7 +159,11 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
             : _SelectedSection(state: state, controller: controller),
       ],
       _ => [
-        _TimetableSection(state: state, controller: controller),
+        _TimetableSection(
+          state: state,
+          controller: controller,
+          onCellLookup: _findCourseByTimetableSlot,
+        ),
         if (state.selected.isNotEmpty) ...[
           const SizedBox(height: 12),
           _SelectedSection(state: state, controller: controller),
@@ -171,6 +175,22 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
   String _resultTitle(SchedulerState state) {
     final count = state.searchCourses.length + state.timeCourses.length;
     return count == 0 ? '查询结果' : '查询结果 · $count 门';
+  }
+
+  Future<void> _findCourseByTimetableSlot(int day, int slot) async {
+    final lookupSection = _timeLookupSectionForSlot(
+      slot,
+      widget.state.selectedCalendarId,
+    );
+    if (lookupSection == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('当前节次不支持空段查课')));
+      return;
+    }
+    await widget.controller.findByTime(day: day, section: lookupSection);
+    if (!mounted) return;
+    setState(() => _activeSection = 1);
   }
 }
 
@@ -770,10 +790,15 @@ class _SelectedSection extends StatelessWidget {
 }
 
 class _TimetableSection extends StatelessWidget {
-  const _TimetableSection({required this.state, required this.controller});
+  const _TimetableSection({
+    required this.state,
+    required this.controller,
+    required this.onCellLookup,
+  });
 
   final SchedulerState state;
   final SchedulerController controller;
+  final Future<void> Function(int day, int slot) onCellLookup;
 
   @override
   Widget build(BuildContext context) {
@@ -793,7 +818,11 @@ class _TimetableSection extends StatelessWidget {
             _ScheduleWarning(unscheduled: state.unscheduledSelected),
             const SizedBox(height: 10),
           ],
-          _TimetableGrid(state: state, controller: controller),
+          _TimetableGrid(
+            state: state,
+            controller: controller,
+            onCellLookup: onCellLookup,
+          ),
         ],
       ),
     );
@@ -1280,10 +1309,15 @@ class _MajorSearchSheetState extends State<_MajorSearchSheet> {
 }
 
 class _TimetableGrid extends StatelessWidget {
-  const _TimetableGrid({required this.state, required this.controller});
+  const _TimetableGrid({
+    required this.state,
+    required this.controller,
+    required this.onCellLookup,
+  });
 
   final SchedulerState state;
   final SchedulerController controller;
+  final Future<void> Function(int day, int slot) onCellLookup;
 
   @override
   Widget build(BuildContext context) {
@@ -1324,7 +1358,7 @@ class _TimetableGrid extends StatelessWidget {
                               dayWidth: dayWidth,
                               cellHeight: cellHeight,
                               rowGap: rowGap,
-                              controller: controller,
+                              onCellLookup: onCellLookup,
                             ),
                         ],
                       ),
@@ -1456,7 +1490,7 @@ class _TimetableRow extends StatelessWidget {
     required this.dayWidth,
     required this.cellHeight,
     required this.rowGap,
-    required this.controller,
+    required this.onCellLookup,
   });
 
   final int section;
@@ -1464,7 +1498,7 @@ class _TimetableRow extends StatelessWidget {
   final double dayWidth;
   final double cellHeight;
   final double rowGap;
-  final SchedulerController controller;
+  final Future<void> Function(int day, int slot) onCellLookup;
 
   @override
   Widget build(BuildContext context) {
@@ -1511,7 +1545,7 @@ class _TimetableRow extends StatelessWidget {
                     day: day,
                     section: section,
                     height: cellHeight,
-                    controller: controller,
+                    onCellLookup: onCellLookup,
                   ),
                 ),
               ),
@@ -1527,20 +1561,20 @@ class _TimetableCell extends StatelessWidget {
     required this.day,
     required this.section,
     required this.height,
-    required this.controller,
+    required this.onCellLookup,
   });
 
   final int day;
   final int section;
   final double height;
-  final SchedulerController controller;
+  final Future<void> Function(int day, int slot) onCellLookup;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(11);
     return GestureDetector(
       key: ValueKey('scheduler-cell-$day-$section'),
-      onTap: () => controller.findByTime(day: day, section: section),
+      onTap: () => onCellLookup(day, section),
       child: SizedBox(
         height: height,
         width: double.infinity,
@@ -2608,6 +2642,21 @@ Color _courseColor(String input) {
   }
   final hue = (hash % 360).toDouble();
   return HSLColor.fromAHSL(1, hue, 0.68, 0.46).toColor();
+}
+
+int? _timeLookupSectionForSlot(int slot, int? calendarId) {
+  final isNewElevenSlotCalendar = (calendarId ?? 0) >= 120;
+  return switch (slot) {
+    1 || 2 => 1,
+    3 || 4 => 2,
+    5 || 6 => 3,
+    7 || 8 => 4,
+    9 => 5,
+    10 when isNewElevenSlotCalendar => 5,
+    10 || 11 || 12 when !isNewElevenSlotCalendar => 6,
+    11 when isNewElevenSlotCalendar => 6,
+    _ => null,
+  };
 }
 
 Color _solidCourseColor(String input) {
