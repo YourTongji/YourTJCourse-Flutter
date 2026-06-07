@@ -123,28 +123,17 @@ jobs:
           echo "OHOS SDK location: $OHOS_SDK_HOME"
           echo "Looking for hvigor..."
 
-      - name: List OHOS Flutter SDK version
+      - name: Flutter version check
         run: |
-          flutter --version 2>&1
-          flutter doctor 2>&1 | head -30
+          flutter --version 2>&1 | head -5
+          flutter doctor 2>&1 | head -10
 
-      - name: Flutter pub get (diagnose)
+      - name: Build HAP
         continue-on-error: true
         run: |
-          flutter pub get --verbose 2>&1 | tail -40 || \
-          echo "PUB_GET_FAILED=true" >> $GITHUB_ENV
-
-      - name: Try HAP build
-        continue-on-error: true
-        run: |
-          if [ "${{ env.PUB_GET_FAILED }}" = "true" ]; then
-            echo "Skipping HAP build because pub get failed"
-            echo "HAP_BUILD_SKIPPED=true" >> $GITHUB_ENV
-            exit 0
-          fi
           flutter build hap --release 2>&1 || \
           flutter build hap 2>&1 || \
-          echo "HAP build incomplete (needs local DevEco setup)"
+          echo "HAP_BUILD_UNSTABLE=true" >> $GITHUB_ENV
 
       - name: List build outputs
         if: always()
