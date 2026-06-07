@@ -457,6 +457,21 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
+  Future<List<SchedulerCourse>> findCoursesAtTimeForReplacement({
+    required int day,
+    required int section,
+  }) async {
+    final current = state.value ?? const SchedulerState();
+    final calendarId = current.selectedCalendarId;
+    if (calendarId == null) return const [];
+    return _repository.findCourseByTime(
+      calendarId: calendarId,
+      day: day,
+      section: section,
+      cancelToken: _cancelToken,
+    );
+  }
+
   Future<SchedulerCourse> loadCourseClasses(SchedulerCourse course) async {
     if (course.classes.isNotEmpty) return course;
     final current = state.value ?? const SchedulerState();
@@ -505,6 +520,30 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       ScheduledClass(course: course, classInfo: classInfo),
     ];
     state = AsyncData(current.copyWith(selected: selected, notice: '已加入模拟课表'));
+    _persistSelectedClasses(selected);
+  }
+
+  void replaceClass({
+    required String replacingCode,
+    required SchedulerCourse course,
+    required SchedulerClass classInfo,
+  }) {
+    final current = state.value ?? const SchedulerState();
+    final selectedWithoutCurrent = current.selected
+        .where((item) => !_isSameBaseCourse(item.classInfo.code, replacingCode))
+        .toList(growable: false);
+    final collision = _findCollision(selectedWithoutCurrent, classInfo);
+    if (collision != null) {
+      state = AsyncData(
+        current.copyWith(notice: '与 ${collision.course.courseName} 时间冲突'),
+      );
+      return;
+    }
+    final selected = [
+      ...selectedWithoutCurrent,
+      ScheduledClass(course: course, classInfo: classInfo),
+    ];
+    state = AsyncData(current.copyWith(selected: selected, notice: '已替换模拟课表'));
     _persistSelectedClasses(selected);
   }
 

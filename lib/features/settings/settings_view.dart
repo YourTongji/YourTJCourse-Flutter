@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/config/app_config.dart';
 import '../../domain/repositories/settings_repository.dart';
 
 class SettingsView extends ConsumerWidget {
@@ -94,13 +95,13 @@ class SettingsView extends ConsumerWidget {
             leading: const Icon(Icons.help_outline),
             title: const Text('常见问题'),
             subtitle: const Text('点评、社区管理与联系方式'),
-            onTap: () => _showTextSheet(context, '常见问题', _faqText),
+            onTap: () => _showFaq(context),
           ),
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: const Text('隐私政策'),
             subtitle: const Text('查看数据收集与安全说明'),
-            onTap: () => _showTextSheet(context, '隐私政策', _privacyText),
+            onTap: () => _showPrivacy(context),
           ),
           ListTile(
             leading: const Icon(Icons.policy_outlined),
@@ -112,7 +113,7 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.security_outlined),
             title: const Text('安全与合规'),
-            subtitle: const Text('Release 默认 HTTPS，客户端不保存后端密钥'),
+            subtitle: const Text('Release 默认 HTTPS，评价提供举报与隐藏入口'),
             onTap: () => _showTextSheet(context, '安全与合规', _safetyText),
           ),
           ListTile(
@@ -204,7 +205,8 @@ class SettingsView extends ConsumerWidget {
       _SheetParagraph('简介', _aboutIntro),
       _SheetParagraph('匿名身份', _aboutAnonymous),
       _SheetParagraph('点评管理', _aboutModeration),
-      _SheetParagraph('联系方式', '您目前可以通过邮件 support@yourtj.de 联系我们。'),
+      const _SheetParagraph('联系方式', '您目前可以通过邮件联系我们。'),
+      const _SheetLink('support@yourtj.de', 'mailto:support@yourtj.de'),
       _SheetParagraph('致谢', 'YOURTJ选课社区基于 SJTU选课社区 源代码。'),
       _SheetLink(
         'YOURTJ选课社区',
@@ -222,6 +224,42 @@ class SettingsView extends ConsumerWidget {
         'TONGJI-COURSE-SCHEDULER',
         'https://github.com/XiaLing233/tongji-course-scheduler',
       ),
+    ]);
+  }
+
+  void _showFaq(BuildContext context) {
+    _showRichTextSheet(context, '常见问题', const [
+      _SheetParagraph('我该点评哪些课程？写什么？', _faqReviewTarget),
+      _SheetParagraph('选课社区是用来找到“水课”的吗？', _faqPurpose),
+      _SheetParagraph('我喜欢看 1-5 星评分的数据，不喜欢看字。', _faqRating),
+      _SheetParagraph('选课社区谁开发和部署的？', '同济大学在校（或曾经在校）生。'),
+      _SheetParagraph('选课社区由谁来管理？', '同济大学在校（或曾经在校）生。'),
+      _SheetParagraph('我会因为在这里发表点评而被约谈吗？', '不会，因为选课社区采用不记名制。'),
+      _SheetParagraph('网站上的内容是否受管理？', _faqModeration),
+      _SheetParagraph('如何界定社区内容的版权问题？', _faqCopyright),
+      _SheetParagraph('如何联系你们？', '请通过邮件向社区提出意见和建议。'),
+      _SheetLink('support@yourtj.de', 'mailto:support@yourtj.de'),
+      _SheetParagraph('我是课程老师……', _faqTeacher),
+      _SheetLink('support@yourtj.de', 'mailto:support@yourtj.de'),
+    ]);
+  }
+
+  void _showPrivacy(BuildContext context) {
+    _showRichTextSheet(context, '隐私政策', const [
+      _SheetParagraph('', _privacyIntro),
+      _SheetParagraph('信息收集', _privacyCollection),
+      _SheetParagraph('第三方代码', _privacyThirdParty),
+      _SheetParagraph('数据传输与存储', _privacyTransport),
+      _SheetParagraph('数据安全', _privacySecurity),
+      _SheetParagraph('数据保留与删除', _privacyRetention),
+      _SheetParagraph('儿童隐私', _privacyChildren),
+      _SheetParagraph('政策变更', _privacyChanges),
+      _SheetParagraph('联系我们', '您可以通过以下入口联系我们。'),
+      _SheetLink(
+        'GitHub Issues',
+        'https://github.com/YourTongji/YourTJCourse-Flutter/issues',
+      ),
+      _SheetLink('项目仓库', 'https://github.com/YourTongji/YourTJCourse-Flutter'),
     ]);
   }
 
@@ -441,13 +479,20 @@ class _ReleaseUpdateCheckerState extends State<_ReleaseUpdateChecker> {
         '$_apiBase/releases/tags/${_channel.tag}',
       );
       final release = _ReleaseInfo.fromJson(response.data);
+      final currentBuildSha = AppConfig.fromEnv().buildSha;
+      final isCurrentBuild =
+          currentBuildSha.isNotEmpty &&
+          release.targetCommitish.isNotEmpty &&
+          release.targetCommitish == currentBuildSha;
       final recommendedAsset = release.findBestAsset(supportedAbis);
       if (!mounted) return;
       setState(() {
         _supportedAbis = supportedAbis;
         _release = release;
-        _recommendedAsset = recommendedAsset;
-        _message = release.apkAssets.isEmpty
+        _recommendedAsset = isCurrentBuild ? null : recommendedAsset;
+        _message = isCurrentBuild
+            ? '当前已是${_channel.label}最新构建。'
+            : release.apkAssets.isEmpty
             ? '${_channel.label}没有可下载的 APK'
             : recommendedAsset == null
             ? '已找到${_channel.label}，但没有匹配当前 CPU 架构的 APK'
@@ -559,6 +604,7 @@ class _ReleaseInfo {
   const _ReleaseInfo({
     required this.tagName,
     required this.name,
+    required this.targetCommitish,
     required this.apkAssets,
   });
 
@@ -574,12 +620,14 @@ class _ReleaseInfo {
     return _ReleaseInfo(
       tagName: '${map['tag_name'] ?? ''}',
       name: '${map['name'] ?? 'YourTJ Course'}',
+      targetCommitish: '${map['target_commitish'] ?? ''}',
       apkAssets: assets,
     );
   }
 
   final String tagName;
   final String name;
+  final String targetCommitish;
   final List<_ReleaseAsset> apkAssets;
 
   _ReleaseAsset? findBestAsset(List<String> supportedAbis) {
@@ -692,9 +740,6 @@ YourTJ Course 是一个校园选课信息分享平台，为用户提供课程评
 
 4. 免责声明
 平台信息仅供参考，课程数据来源于教务系统，平台不保证数据的绝对准确性。
-
-5. 隐私
-本测试版不会收集不必要的个人信息，不会提交本机密钥或 .env 文件。
 ''';
 
 const _aboutIntro =
@@ -705,70 +750,43 @@ const _aboutAnonymous = '选课社区无需登录，不存储任何个人信息�
 const _aboutModeration =
     '在符合社区规范的情况下，我们不修改选课社区的点评内容，也不评价内容的真实性。如果您上过某一门课程并认为网站上的点评与事实不符，欢迎提交您的意见，我们相信全面的信息会给大家最好的答案。管理员的责任仅限于维护系统稳定、删除非课程点评内容和重复发帖，并维护课程和教师信息格式，方便进行数据的批量处理。';
 
-const _faqText = '''
-我该点评哪些课程？写什么？
-所有的课程。但如果你想帮忙，最好的是那些还没有点评的课程和老师。请不要吝啬你的好评，也不要害怕说坏话。即使是没有什么亮点的课程也值得你来写一条点评，因为“这门课很正常”也是很重要的信息。
+const _faqReviewTarget =
+    '所有的课程。但如果你想帮忙，最好的是那些还没有点评的课程和老师。请不要吝啬你的好评，也不要害怕说坏话。即使是没有什么亮点的课程也值得你来写一条点评，因为“这门课很正常”也是很重要的信息。\n\n一个理想的点评应该饱含事实、尽量全面，并且清晰。请只点评自己上过的课程，列举事实，不鼓励情绪宣泄。';
 
-一个理想的点评应该饱含事实、尽量全面，并且清晰。请只点评自己上过的课程，列举事实，不鼓励情绪宣泄。
+const _faqPurpose = '这不是社区的主题。我们希望提供完全信息，方便同学们了解课程风格、考核标准与历史，而不是只讨论哪些课容易满绩。';
 
-选课社区是用来找到“水课”的吗？
-这不是社区的主题。我们希望提供完全信息，方便同学们了解课程风格、考核标准与历史，而不是只讨论哪些课容易满绩。
+const _faqRating =
+    '数据本身很容易带来错误信心。每个同学对推荐程度、工作量的判断标准不同，数字看似客观，实际很主观。内容才是这个网站存在的核心。';
 
-我喜欢看 1-5 星评分的数据，不喜欢看字。
-数据本身很容易带来错误信心。每个同学对推荐程度、工作量的判断标准不同，数字看似客观，实际很主观。内容才是这个网站存在的核心。
+const _faqModeration =
+    '我们原则上不修改网站上的课程点评，也不评价内容真实性。但非课程点评信息、刷点评、侵害他人利益、违反用户所在地区法律的内容，本社区不予接受。';
 
-选课社区谁开发和部署的？
-同济大学在校（或曾经在校）生。
+const _faqCopyright =
+    '提交点评时，您同意向社区提供对点评内容的永久、不可撤回、非独占、全球有效无限制的许可。您依然享有提交内容的全部版权。';
 
-选课社区由谁来管理？
-同济大学在校（或曾经在校）生。
+const _faqTeacher =
+    '如果希望回复点评，或认为课程点评中存在虚假内容，请使用学校邮箱发信给我们，并提供希望回复或澄清的内容。确认身份后我们会协助处理。';
 
-我会因为在这里发表点评而被约谈吗？
-不会，因为选课社区采用不记名制。
+const _privacyIntro =
+    '更新日期：2026 年 6 月\n\nYourTJ Course 尊重并保护您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息。';
 
-网站上的内容是否受管理？
-我们原则上不修改网站上的课程点评，也不评价内容真实性。但非课程点评信息、刷点评、侵害他人利益、违反用户所在地区法律的内容，本社区不予接受。
+const _privacyCollection =
+    '本应用不收集任何个人身份信息。应用首次启动时会生成一个随机 clientId，用于点赞操作的防重复与计数。此标识仅用于 API 请求处理，不做长期追踪。';
 
-如何界定社区内容的版权问题？
-提交点评时，您同意向社区提供对点评内容的永久、不可撤回、非独占、全球有效无限制的许可。您依然享有提交内容的全部版权。
+const _privacyThirdParty = '本应用不包含第三方分析 SDK、广告 SDK 或数据收集代码。';
 
-如何联系你们？
-请通过邮件 support@yourtj.de 向社区提出意见和建议。
+const _privacyTransport =
+    '应用向 YourTJ 运营的后端服务发送请求，以获取课程数据、提交评价、查询排课信息等。这些请求不包含可用于识别您个人身份的信息。所有网络通信使用 HTTPS 加密。';
 
-我是课程老师……
-如果希望回复点评，或认为课程点评中存在虚假内容，请使用学校邮箱发信到 support@yourtj.de，并提供希望回复或澄清的内容。确认身份后我们会协助处理。
-''';
+const _privacySecurity =
+    '我们不将您的数据用于广告投放、用户画像、机器学习训练或分享给第三方。评价编辑相关签名在本机完成，私钥不出设备。';
 
-const _privacyText = '''
-更新日期：2026 年 6 月
+const _privacyRetention =
+    '由于应用不收集个人身份信息，我们没有需要保留或删除的用户账户数据。已发表的评价内容可联系后端管理员处理。';
 
-YourTJ Course 尊重并保护您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息。
+const _privacyChildren = '本应用面向大学生和成人用户，不针对 13 岁以下儿童，也不会故意收集儿童的个人信息。';
 
-信息收集
-本应用不收集任何个人身份信息。应用首次启动时会生成一个随机 clientId，用于点赞操作的防重复与计数。此标识仅用于 API 请求处理，不做长期追踪。
-
-第三方代码
-本应用不包含第三方分析 SDK、广告 SDK 或数据收集代码。
-
-数据传输与存储
-应用向 YourTJ 运营的后端服务发送请求，以获取课程数据、提交评价、查询排课信息等。这些请求不包含可用于识别您个人身份的信息。所有网络通信使用 HTTPS 加密。
-
-数据安全
-我们不将您的数据用于广告投放、用户画像、机器学习训练或分享给第三方。评价编辑相关签名在本机完成，私钥不出设备。
-
-数据保留与删除
-由于应用不收集个人身份信息，我们没有需要保留或删除的用户账户数据。已发表的评价内容可联系后端管理员处理。
-
-儿童隐私
-本应用面向大学生和成人用户，不针对 13 岁以下儿童，也不会故意收集儿童的个人信息。
-
-政策变更
-本隐私政策可能不时更新。重大变更将通过应用内公告通知您。
-
-联系我们
-GitHub Issues：https://github.com/YourTongji/YourTJCourse-Flutter/issues
-项目仓库：https://github.com/YourTongji/YourTJCourse-Flutter
-''';
+const _privacyChanges = '本隐私政策可能不时更新。重大变更将通过应用内公告通知您。';
 
 const _communityGuidelinesText = '''
 - 尊重他人，不进行人身攻击。
@@ -781,8 +799,6 @@ const _communityGuidelinesText = '''
 
 const _safetyText = '''
 - Release APK 明确声明 Android INTERNET 权限，用于访问真实后端。
-- 默认 API 地址为 https://jcourse.yourtj.de。
-- 客户端不保存后端密钥，不提交 .env 文件。
 - 评价提供举报与本机隐藏入口。
 - 钱包功能暂不纳入 Flutter 测试版同步范围。
 ''';

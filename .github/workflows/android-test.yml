@@ -80,7 +80,7 @@ jobs:
         run: flutter test
 
       - name: Build release APKs
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi --dart-define=APP_BUILD_SHA=$GITHUB_SHA
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4

@@ -5,6 +5,7 @@ class AppConfig {
     required this.apiBaseUrl,
     required this.creditApiBaseUrl,
     required this.captchaApiBaseUrl,
+    required this.buildSha,
   });
 
   factory AppConfig.fromEnv() {
@@ -17,10 +18,12 @@ class AppConfig {
       captchaApiBaseUrl:
           dotenv.maybeGet('CAPTCHA_API_BASE_URL') ??
           'https://captcha.07211024.xyz',
+      buildSha: const String.fromEnvironment('APP_BUILD_SHA'),
     );
   }
 
   final String apiBaseUrl;
   final String creditApiBaseUrl;
   final String captchaApiBaseUrl;
+  final String buildSha;
 }

@@ -77,6 +77,7 @@ class _SchedulerBody extends StatefulWidget {
 
 class _SchedulerBodyState extends State<_SchedulerBody> {
   var _activeSection = 0;
+  var _sidebarCollapsed = false;
 
   static const _sections = [
     LkcnCategoryItem(text: '筛选', icon: Icons.tune_outlined),
@@ -99,7 +100,10 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
             sections: _sections,
             active: _activeSection,
             state: state,
+            collapsed: _sidebarCollapsed,
             onChange: (index) => setState(() => _activeSection = index),
+            onToggleCollapsed: () =>
+                setState(() => _sidebarCollapsed = !_sidebarCollapsed),
           ),
           Expanded(
             child: ListView(
@@ -175,13 +179,17 @@ class _SchedulerSidebar extends StatelessWidget {
     required this.sections,
     required this.active,
     required this.state,
+    required this.collapsed,
     required this.onChange,
+    required this.onToggleCollapsed,
   });
 
   final List<LkcnCategoryItem> sections;
   final int active;
   final SchedulerState state;
+  final bool collapsed;
   final ValueChanged<int> onChange;
+  final VoidCallback onToggleCollapsed;
 
   @override
   Widget build(BuildContext context) {
@@ -191,13 +199,20 @@ class _SchedulerSidebar extends StatelessWidget {
         color: scheme.surfaceContainerLow,
         border: Border(right: BorderSide(color: scheme.outlineVariant)),
       ),
-      child: SizedBox(
-        width: 76,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: collapsed ? 48 : 76,
         child: Column(
           children: [
+            _SidebarCollapseButton(
+              collapsed: collapsed,
+              onTap: onToggleCollapsed,
+            ),
             _SidebarButton(
               item: sections[0],
               selected: active == 0,
+              collapsed: collapsed,
               onTap: () => onChange(0),
             ),
             _SidebarButton(
@@ -209,6 +224,7 @@ class _SchedulerSidebar extends StatelessWidget {
                     : _compactCount(state.majorCourses.length),
               ),
               selected: active == 1,
+              collapsed: collapsed,
               onTap: () => onChange(1),
             ),
             _SidebarButton(
@@ -218,11 +234,13 @@ class _SchedulerSidebar extends StatelessWidget {
                 dot: state.selected.isNotEmpty,
               ),
               selected: active == 2,
+              collapsed: collapsed,
               onTap: () => onChange(2),
             ),
             _SidebarButton(
               item: sections[3],
               selected: active == 3,
+              collapsed: collapsed,
               onTap: () => onChange(3),
             ),
           ],
@@ -236,15 +254,55 @@ class _SchedulerSidebar extends StatelessWidget {
   }
 }
 
+class _SidebarCollapseButton extends StatelessWidget {
+  const _SidebarCollapseButton({required this.collapsed, required this.onTap});
+
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 8, 6, 4),
+      child: Tooltip(
+        message: collapsed ? '展开侧栏' : '折叠侧栏',
+        child: Material(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: SizedBox(
+              height: 36,
+              child: Center(
+                child: Icon(
+                  collapsed
+                      ? Icons.keyboard_double_arrow_right
+                      : Icons.keyboard_double_arrow_left,
+                  size: 19,
+                  color: scheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SidebarButton extends StatelessWidget {
   const _SidebarButton({
     required this.item,
     required this.selected,
+    required this.collapsed,
     required this.onTap,
   });
 
   final LkcnCategoryItem item;
   final bool selected;
+  final bool collapsed;
   final VoidCallback onTap;
 
   @override
@@ -255,7 +313,7 @@ class _SidebarButton extends StatelessWidget {
       child: ColoredBox(
         color: selected ? scheme.surface : Colors.transparent,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(vertical: collapsed ? 12 : 14),
           child: Row(
             children: [
               DecoratedBox(
@@ -279,27 +337,28 @@ class _SidebarButton extends StatelessWidget {
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 5),
+                    if (!collapsed) const SizedBox(height: 5),
                     Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        Text(
-                          item.text,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: selected
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            color: selected
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                        if (!collapsed)
+                          Text(
+                            item.text,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: selected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              color: selected
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
                         if (item.tag != null)
                           Positioned(
-                            right: -25,
-                            top: -9,
+                            right: collapsed ? -12 : -25,
+                            top: collapsed ? -24 : -9,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: scheme.primary,
@@ -323,8 +382,8 @@ class _SidebarButton extends StatelessWidget {
                           ),
                         if (item.dot)
                           Positioned(
-                            right: -8,
-                            top: -3,
+                            right: collapsed ? -9 : -8,
+                            top: collapsed ? -20 : -3,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: scheme.error,
@@ -1228,34 +1287,132 @@ class _TimetableGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 420;
-    final leftWidth = compact ? 30.0 : 34.0;
-    final dayWidth = compact ? 58.0 : 70.0;
-    final cellHeight = compact ? 58.0 : 64.0;
-    final tableWidth = leftWidth + dayWidth * 7;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SizedBox(
-        width: tableWidth,
-        child: Column(
-          children: [
-            _WeekHeader(leftWidth: leftWidth),
-            const SizedBox(height: 6),
-            for (var section = 1; section <= 12; section++)
-              _TimetableRow(
-                section: section,
-                leftWidth: leftWidth,
-                dayWidth: dayWidth,
-                cellHeight: cellHeight,
-                entries: state.timetableEntries,
-                controller: controller,
-              ),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 420;
+        final leftWidth = compact ? 28.0 : 32.0;
+        final minDayWidth = compact ? 46.0 : 54.0;
+        final availableDayWidth = (constraints.maxWidth - leftWidth) / 7;
+        final dayWidth = math.max(minDayWidth, availableDayWidth);
+        final cellHeight = compact ? 58.0 : 64.0;
+        const rowGap = 6.0;
+        final tableWidth = math.max(
+          constraints.maxWidth,
+          leftWidth + dayWidth * 7,
+        );
+        final rowExtent = cellHeight + rowGap;
+        final bodyHeight = rowExtent * 12;
+        final blocks = _buildTimetableBlocks(state.timetableEntries);
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Column(
+              children: [
+                _WeekHeader(leftWidth: leftWidth),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: bodyHeight,
+                  child: Stack(
+                    children: [
+                      Column(
+                        children: [
+                          for (var section = 1; section <= 12; section++)
+                            _TimetableRow(
+                              section: section,
+                              leftWidth: leftWidth,
+                              dayWidth: dayWidth,
+                              cellHeight: cellHeight,
+                              rowGap: rowGap,
+                              controller: controller,
+                            ),
+                        ],
+                      ),
+                      for (final block in blocks)
+                        Positioned(
+                          left: leftWidth + (block.day - 1) * dayWidth + 2,
+                          top: (block.startSlot - 1) * rowExtent,
+                          width: dayWidth - 4,
+                          height:
+                              (block.slotCount * cellHeight) +
+                              ((block.slotCount - 1) * rowGap),
+                          child: RepaintBoundary(
+                            key: ValueKey(
+                              'scheduler-course-cell-${block.day}-${block.startSlot}-${block.entry.item.classInfo.code}',
+                            ),
+                            child: _TimetableCourseBlock(
+                              block: block,
+                              controller: controller,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+}
+
+class _TimetableBlock {
+  const _TimetableBlock({
+    required this.day,
+    required this.startSlot,
+    required this.slotCount,
+    required this.entry,
+  });
+
+  final int day;
+  final int startSlot;
+  final int slotCount;
+  final SchedulerTimetableEntry entry;
+}
+
+List<_TimetableBlock> _buildTimetableBlocks(
+  List<SchedulerTimetableEntry> entries,
+) {
+  final grouped = <String, List<SchedulerTimetableEntry>>{};
+  for (final entry in entries) {
+    final key = [
+      entry.item.classInfo.code,
+      entry.day,
+      entry.arrangement.arrangementText,
+    ].join('|');
+    grouped.putIfAbsent(key, () => []).add(entry);
+  }
+
+  final blocks = <_TimetableBlock>[];
+  for (final group in grouped.values) {
+    group.sort((left, right) => left.slot.compareTo(right.slot));
+    var index = 0;
+    while (index < group.length) {
+      final start = group[index];
+      var endIndex = index;
+      while (endIndex + 1 < group.length &&
+          group[endIndex + 1].slot == group[endIndex].slot + 1) {
+        endIndex++;
+      }
+      blocks.add(
+        _TimetableBlock(
+          day: start.day,
+          startSlot: start.slot,
+          slotCount: group[endIndex].slot - start.slot + 1,
+          entry: start,
+        ),
+      );
+      index = endIndex + 1;
+    }
+  }
+  blocks.sort((left, right) {
+    final dayCompare = left.day.compareTo(right.day);
+    if (dayCompare != 0) return dayCompare;
+    return left.startSlot.compareTo(right.startSlot);
+  });
+  return blocks;
 }
 
 class _WeekHeader extends StatelessWidget {
@@ -1298,7 +1455,7 @@ class _TimetableRow extends StatelessWidget {
     required this.leftWidth,
     required this.dayWidth,
     required this.cellHeight,
-    required this.entries,
+    required this.rowGap,
     required this.controller,
   });
 
@@ -1306,16 +1463,16 @@ class _TimetableRow extends StatelessWidget {
   final double leftWidth;
   final double dayWidth;
   final double cellHeight;
-  final List<SchedulerTimetableEntry> entries;
+  final double rowGap;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: SizedBox(
-        height: cellHeight,
+    return SizedBox(
+      height: cellHeight + rowGap,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: rowGap),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1354,7 +1511,6 @@ class _TimetableRow extends StatelessWidget {
                     day: day,
                     section: section,
                     height: cellHeight,
-                    entries: entries,
                     controller: controller,
                   ),
                 ),
@@ -1371,58 +1527,24 @@ class _TimetableCell extends StatelessWidget {
     required this.day,
     required this.section,
     required this.height,
-    required this.entries,
     required this.controller,
   });
 
   final int day;
   final int section;
   final double height;
-  final List<SchedulerTimetableEntry> entries;
   final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
-    final entry = _entryAt(entries, day, section);
     final radius = BorderRadius.circular(11);
     return GestureDetector(
       key: ValueKey('scheduler-cell-$day-$section'),
       onTap: () => controller.findByTime(day: day, section: section),
-      onLongPress: entry == null
-          ? null
-          : () => _showClassSheet(context, entry.item),
       child: SizedBox(
         height: height,
         width: double.infinity,
-        child: entry == null
-            ? _EmptyTimetableCell(height: height, radius: radius)
-            : RepaintBoundary(
-                key: ValueKey(
-                  'scheduler-course-cell-$day-$section-${entry.item.classInfo.code}',
-                ),
-                child: _FilledTimetableCell(
-                  entry: entry,
-                  height: height,
-                  radius: radius,
-                ),
-              ),
-      ),
-    );
-  }
-
-  void _showClassSheet(BuildContext context, ScheduledClass item) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          child: _ClassDetail(
-            course: item.course,
-            classInfo: item.classInfo,
-            controller: controller,
-          ),
-        ),
+        child: _EmptyTimetableCell(height: height, radius: radius),
       ),
     );
   }
@@ -1450,86 +1572,378 @@ class _EmptyTimetableCell extends StatelessWidget {
   }
 }
 
-class _FilledTimetableCell extends StatelessWidget {
-  const _FilledTimetableCell({
-    required this.entry,
-    required this.height,
-    required this.radius,
-  });
+class _TimetableCourseBlock extends StatelessWidget {
+  const _TimetableCourseBlock({required this.block, required this.controller});
 
-  final SchedulerTimetableEntry entry;
-  final double height;
-  final BorderRadius radius;
+  final _TimetableBlock block;
+  final SchedulerController controller;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final entry = block.entry;
     final item = entry.item;
     final color = _solidCourseColor(item.classInfo.code);
-    final teachers = item.classInfo.teachers
-        .map((teacher) => teacher.teacherName)
-        .where((name) => name.isNotEmpty)
-        .join('、');
-    final room = entry.arrangement.occupyRoom.isEmpty
-        ? null
-        : entry.arrangement.occupyRoom;
-    return Container(
-      height: height,
-      width: double.infinity,
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: radius,
-        border: Border.all(
-          color: scheme.onSurface.withValues(alpha: 0.24),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+    final radius = BorderRadius.circular(11);
+    return GestureDetector(
+      onLongPress: () => _showTimetableBlockSheet(context),
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: radius,
+          border: Border.all(
+            color: scheme.onSurface.withValues(alpha: 0.24),
+            width: 1.2,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.14),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
             _compactCourseName(item.course.courseName),
             textAlign: TextAlign.center,
-            maxLines: 2,
+            maxLines: block.slotCount <= 1 ? 2 : 4,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 10.5,
-              height: 1.08,
+              fontSize: 11,
+              height: 1.12,
               color: Colors.white,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 3),
+        ),
+      ),
+    );
+  }
+
+  void _showTimetableBlockSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.76,
+        minChildSize: 0.42,
+        maxChildSize: 0.94,
+        builder: (context, scrollController) {
+          return _TimetableBlockActionSheet(
+            block: block,
+            controller: controller,
+            scrollController: scrollController,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TimetableBlockActionSheet extends StatefulWidget {
+  const _TimetableBlockActionSheet({
+    required this.block,
+    required this.controller,
+    required this.scrollController,
+  });
+
+  final _TimetableBlock block;
+  final SchedulerController controller;
+  final ScrollController scrollController;
+
+  @override
+  State<_TimetableBlockActionSheet> createState() =>
+      _TimetableBlockActionSheetState();
+}
+
+class _TimetableBlockActionSheetState
+    extends State<_TimetableBlockActionSheet> {
+  late final Future<List<SchedulerCourse>> _replacementFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _replacementFuture = widget.controller.findCoursesAtTimeForReplacement(
+      day: widget.block.day,
+      section: widget.block.startSlot,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.block.entry.item;
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: ListView(
+        controller: widget.scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        children: [
           Text(
-            [
-              '${_dayName(entry.day)}第${entry.slot}节',
-              if (teachers.isNotEmpty) teachers,
-              ?room,
-            ].join(' · '),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 8.5,
-              height: 1.05,
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+            item.course.courseName,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
             ),
+          ),
+          const SizedBox(height: 10),
+          _ClassDetail(
+            course: item.course,
+            classInfo: item.classInfo,
+            controller: widget.controller,
+            action: _ClassDetailAction.none,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: LkcnButton(
+                  text: '查看评价',
+                  icon: const Icon(Icons.rate_review_outlined),
+                  size: LkcnButtonSize.small,
+                  round: true,
+                  block: true,
+                  onTap: () {
+                    Navigator.of(context).maybePop();
+                    context.push(
+                      _reviewUri(item.course, item.classInfo).toString(),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: LkcnButton(
+                  text: '删除该课',
+                  icon: const Icon(Icons.delete_outline),
+                  size: LkcnButtonSize.small,
+                  round: true,
+                  block: true,
+                  onTap: () {
+                    widget.controller.removeClass(item.classInfo.code);
+                    Navigator.of(context).maybePop();
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            '替换为该时段其他课程',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          FutureBuilder<List<SchedulerCourse>>(
+            future: _replacementFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final courses = (snapshot.data ?? const <SchedulerCourse>[])
+                  .where(
+                    (course) => course.courseCode != item.course.courseCode,
+                  )
+                  .toList(growable: false);
+              if (courses.isEmpty) {
+                return Text(
+                  '这个节次暂时没有其他候选课程。',
+                  style: theme.textTheme.bodySmall,
+                );
+              }
+              return Column(
+                children: [
+                  for (final course in courses.take(30))
+                    _ReplacementCourseRow(
+                      course: course,
+                      day: widget.block.day,
+                      section: widget.block.startSlot,
+                      replacingCode: item.classInfo.code,
+                      controller: widget.controller,
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 }
+
+class _ReplacementCourseRow extends StatefulWidget {
+  const _ReplacementCourseRow({
+    required this.course,
+    required this.day,
+    required this.section,
+    required this.replacingCode,
+    required this.controller,
+  });
+
+  final SchedulerCourse course;
+  final int day;
+  final int section;
+  final String replacingCode;
+  final SchedulerController controller;
+
+  @override
+  State<_ReplacementCourseRow> createState() => _ReplacementCourseRowState();
+}
+
+class _ReplacementCourseRowState extends State<_ReplacementCourseRow> {
+  SchedulerCourse? _hydratedCourse;
+  var _expanded = false;
+  var _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final course = _hydratedCourse ?? widget.course;
+    final matchingClasses = course.classes
+        .where(
+          (classInfo) => classInfo.arrangements.any(
+            (arrangement) => arrangement.occupies(widget.day, widget.section),
+          ),
+        )
+        .toList(growable: false);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                course.courseName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  LkcnTag(text: course.courseCode, type: LkcnTagType.light),
+                  if (course.faculty.isNotEmpty)
+                    LkcnTag(
+                      text: course.faculty,
+                      type: LkcnTagType.light,
+                      color: LkcnTagColor.gold,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              LkcnButton.primary(
+                text: _expanded
+                    ? '收起教学班'
+                    : _loading
+                    ? '加载中...'
+                    : '选择教学班',
+                icon: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.swap_horiz_outlined,
+                ),
+                size: LkcnButtonSize.small,
+                round: true,
+                block: true,
+                loading: _loading,
+                onTap: _toggleClasses,
+              ),
+              if (_expanded) ...[
+                const SizedBox(height: 10),
+                if (matchingClasses.isEmpty)
+                  Text('这门课没有覆盖当前节次的教学班。', style: theme.textTheme.bodySmall)
+                else
+                  for (final classInfo in matchingClasses)
+                    _ReplacementClassTile(
+                      course: course,
+                      classInfo: classInfo,
+                      replacingCode: widget.replacingCode,
+                      controller: widget.controller,
+                    ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleClasses() async {
+    if (_loading) return;
+    if (_expanded) {
+      setState(() => _expanded = false);
+      return;
+    }
+    var course = _hydratedCourse ?? widget.course;
+    if (course.classes.isEmpty) {
+      setState(() => _loading = true);
+      course = await widget.controller.loadCourseClasses(course);
+      if (!mounted) return;
+      setState(() {
+        _hydratedCourse = course;
+        _loading = false;
+      });
+    }
+    setState(() => _expanded = true);
+  }
+}
+
+class _ReplacementClassTile extends StatelessWidget {
+  const _ReplacementClassTile({
+    required this.course,
+    required this.classInfo,
+    required this.replacingCode,
+    required this.controller,
+  });
+
+  final SchedulerCourse course;
+  final SchedulerClass classInfo;
+  final String replacingCode;
+  final SchedulerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _ClassDetail(
+        course: course,
+        classInfo: classInfo,
+        controller: controller,
+        action: _ClassDetailAction.replace,
+        actionText: '替换',
+        onAction: () {
+          controller.replaceClass(
+            replacingCode: replacingCode,
+            course: course,
+            classInfo: classInfo,
+          );
+          Navigator.of(context).maybePop();
+        },
+      ),
+    );
+  }
+}
+
+enum _ClassDetailAction { add, replace, none }
 
 class _ScheduleWarning extends StatelessWidget {
   const _ScheduleWarning({required this.unscheduled});
@@ -1798,11 +2212,17 @@ class _ClassDetail extends StatelessWidget {
     required this.course,
     required this.classInfo,
     required this.controller,
+    this.action = _ClassDetailAction.add,
+    this.actionText,
+    this.onAction,
   });
 
   final SchedulerCourse course;
   final SchedulerClass classInfo;
   final SchedulerController controller;
+  final _ClassDetailAction action;
+  final String? actionText;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1861,37 +2281,49 @@ class _ClassDetail extends StatelessWidget {
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: LkcnButton(
-                      text: '评价',
-                      icon: const Icon(Icons.rate_review_outlined),
-                      size: LkcnButtonSize.small,
-                      round: true,
-                      block: true,
-                      onTap: () => context.push(
-                        _reviewUri(course, classInfo).toString(),
+              if (action != _ClassDetailAction.none) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LkcnButton(
+                        text: '评价',
+                        icon: const Icon(Icons.rate_review_outlined),
+                        size: LkcnButtonSize.small,
+                        round: true,
+                        block: true,
+                        onTap: () => context.push(
+                          _reviewUri(course, classInfo).toString(),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: LkcnButton.primary(
-                      text: '加入',
-                      icon: const Icon(Icons.add),
-                      size: LkcnButtonSize.small,
-                      round: true,
-                      block: true,
-                      onTap: () {
-                        controller.addClass(course, classInfo);
-                        Navigator.of(context).maybePop();
-                      },
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: LkcnButton.primary(
+                        text:
+                            actionText ??
+                            (action == _ClassDetailAction.replace
+                                ? '替换'
+                                : '加入'),
+                        icon: Icon(
+                          action == _ClassDetailAction.replace
+                              ? Icons.swap_horiz_outlined
+                              : Icons.add,
+                        ),
+                        size: LkcnButtonSize.small,
+                        round: true,
+                        block: true,
+                        onTap:
+                            onAction ??
+                            () {
+                              controller.addClass(course, classInfo);
+                              Navigator.of(context).maybePop();
+                            },
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -2167,17 +2599,6 @@ String _csvRow(List<String> cells) {
         return '"$escaped"';
       })
       .join(',');
-}
-
-SchedulerTimetableEntry? _entryAt(
-  List<SchedulerTimetableEntry> entries,
-  int day,
-  int slot,
-) {
-  for (final entry in entries) {
-    if (entry.occupies(day, slot)) return entry;
-  }
-  return null;
 }
 
 Color _courseColor(String input) {

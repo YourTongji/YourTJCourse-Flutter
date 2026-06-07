@@ -181,6 +181,47 @@ void main() {
     },
   );
 
+  test(
+    'scheduler controller replaces selected class at the same time',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _FakeSchedulerRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(schedulerControllerProvider.future);
+      final controller = container.read(schedulerControllerProvider.notifier);
+      await controller.search(courseName: '大学物理');
+      final searched = container.read(schedulerControllerProvider).value!;
+      final original = await controller.loadCourseClasses(
+        searched.searchCourses.single,
+      );
+      controller.addClass(original, original.classes.single);
+
+      final replacementCandidates = await controller
+          .findCoursesAtTimeForReplacement(day: 3, section: 5);
+      final replacement = replacementCandidates.singleWhere(
+        (course) => course.courseCode == 'ETH001',
+      );
+      controller.replaceClass(
+        replacingCode: original.classes.single.code,
+        course: replacement,
+        classInfo: replacement.classes.single,
+      );
+      final state = container.read(schedulerControllerProvider).value!;
+
+      expect(state.selected, hasLength(1));
+      expect(state.selected.single.course.courseName, '工程伦理');
+      expect(state.selected.single.classInfo.code, 'ETH001.01');
+      expect(controller.classAt(3, 5)?.course.courseName, '工程伦理');
+      expect(state.notice, '已替换模拟课表');
+    },
+  );
+
   test('scheduler controller loads optional course candidates', () async {
     final container = ProviderContainer(
       overrides: [
@@ -313,6 +354,33 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     classes: [],
   );
 
+  static const replacementCourse = SchedulerCourse(
+    courseCode: 'ETH001',
+    courseName: '工程伦理',
+    credit: 2,
+    faculty: '马克思主义学院',
+    courseNature: ['通识选修'],
+    campus: ['四平路'],
+    classes: [
+      SchedulerClass(
+        code: 'ETH001.01',
+        campus: '四平路',
+        teachers: [TeacherInfo(teacherName: '赵老师', teacherCode: 'T003')],
+        teachingLanguage: '中文',
+        arrangements: [
+          ArrangementInfo(
+            arrangementText: '周三 5-6 节',
+            occupyDay: 3,
+            occupyTime: [5, 6],
+            occupyWeek: [1, 2],
+            occupyRoom: 'H102',
+            teacherAndCode: '赵老师 T003',
+          ),
+        ],
+      ),
+    ],
+  );
+
   @override
   Future<List<CalendarTerm>> getAllCalendar({CancelToken? cancelToken}) async {
     return const [
@@ -384,5 +452,15 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     CancelToken? cancelToken,
   }) async {
     return const [optionalCourse];
+  }
+
+  @override
+  Future<List<SchedulerCourse>> findCourseByTime({
+    required int calendarId,
+    required int day,
+    required int section,
+    CancelToken? cancelToken,
+  }) async {
+    return const [roughSearchCourse, replacementCourse];
   }
 }
