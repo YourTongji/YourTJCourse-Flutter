@@ -179,6 +179,7 @@ jobs:
 
           export npm_config_userconfig="$PROJECT_ROOT/.npmrc"
           export npm_config_update_notifier=false
+          export NODE_PATH="$HARMONYOS_HVIGOR_CLI_HOME/node_modules:${NODE_PATH:-}"
           exec node "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js" "$@"
           EOF
 
@@ -195,8 +196,15 @@ jobs:
             ohos/node_modules/@ohos/hvigor
           ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor-ohos-plugin" \
             ohos/node_modules/@ohos/hvigor-ohos-plugin
+          mkdir -p node_modules/@ohos
+          ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor" \
+            node_modules/@ohos/hvigor
+          ln -s "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor-ohos-plugin" \
+            node_modules/@ohos/hvigor-ohos-plugin
           "$RUNNER_TEMP/harmonyos-bin/ohpm" --version
           test -f "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js"
+          NODE_PATH="$HARMONYOS_HVIGOR_CLI_HOME/node_modules" \
+            node -e "console.log(require.resolve('@ohos/hvigor-ohos-plugin'))"
 
       # Step C: Build HAP with --no-pub (skip re-resolution, use fixed config)
       - name: Build HAP
