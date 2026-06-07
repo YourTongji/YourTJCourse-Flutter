@@ -730,6 +730,13 @@ class _TimetableSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (state.timetableEntries.isNotEmpty) ...[
+            _ScheduleRenderStatus(
+              selectedCount: state.selected.length,
+              entryCount: state.timetableEntries.length,
+            ),
+            const SizedBox(height: 10),
+          ],
           if (state.selected.isNotEmpty && state.timetableEntries.isEmpty) ...[
             _ScheduleWarning(unscheduled: state.unscheduledSelected),
             const SizedBox(height: 10),
@@ -1448,8 +1455,9 @@ class _FilledTimetableCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final item = entry.item;
-    final color = _courseColor(item.classInfo.code);
+    final color = _solidCourseColor(item.classInfo.code);
     final teachers = item.classInfo.teachers
         .map((teacher) => teacher.teacherName)
         .where((name) => name.isNotEmpty)
@@ -1459,17 +1467,23 @@ class _FilledTimetableCell extends StatelessWidget {
         : entry.arrangement.occupyRoom;
     return Container(
       height: height,
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color,
-            HSLColor.fromColor(color).withLightness(0.58).toColor(),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: color,
         borderRadius: radius,
+        border: Border.all(
+          color: scheme.onSurface.withValues(alpha: 0.24),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.14),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1486,22 +1500,65 @@ class _FilledTimetableCell extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          if (teachers.isNotEmpty || room != null) ...[
-            const SizedBox(height: 3),
-            Text(
-              [if (teachers.isNotEmpty) teachers, ?room].join(' · '),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 8.5,
-                height: 1,
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+          const SizedBox(height: 3),
+          Text(
+            [
+              '${_dayName(entry.day)}第${entry.slot}节',
+              if (teachers.isNotEmpty) teachers,
+              ?room,
+            ].join(' · '),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 8.5,
+              height: 1.05,
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleRenderStatus extends StatelessWidget {
+  const _ScheduleRenderStatus({
+    required this.selectedCount,
+    required this.entryCount,
+  });
+
+  final int selectedCount;
+  final int entryCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.24)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.view_week_outlined, size: 18, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '已选 $selectedCount 门课，周课表已渲染 $entryCount 个节次',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -2163,6 +2220,24 @@ Color _courseColor(String input) {
   }
   final hue = (hash % 360).toDouble();
   return HSLColor.fromAHSL(1, hue, 0.68, 0.46).toColor();
+}
+
+Color _solidCourseColor(String input) {
+  const palette = [
+    Color(0xFF2563EB),
+    Color(0xFF059669),
+    Color(0xFFDC2626),
+    Color(0xFF7C3AED),
+    Color(0xFF0891B2),
+    Color(0xFFCA8A04),
+    Color(0xFFDB2777),
+    Color(0xFF16A34A),
+  ];
+  var hash = 0;
+  for (final code in input.codeUnits) {
+    hash = (hash * 31 + code) & 0x7fffffff;
+  }
+  return palette[hash % palette.length];
 }
 
 String _compactCourseName(String name) {
