@@ -60,10 +60,27 @@ jobs:
 
       - name: Export OHOS SDK variables
         run: |
-          echo "HOS_SDK_HOME=$OHOS_BASE_SDK_HOME" >> $GITHUB_ENV
+          HMOS_SDK_HOME="$RUNNER_TEMP/harmonyos-sdk"
+          HMOS_SDK_VERSION="HarmonyOS-NEXT"
+          mkdir -p "$HMOS_SDK_HOME/$HMOS_SDK_VERSION"
+          cat > "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/sdk-pkg.json" <<'EOF'
+          {
+            "data": {
+              "apiVersion": "12"
+            }
+          }
+          EOF
+          ln -s "$OHOS_BASE_SDK_HOME" "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/openharmony"
+          ln -s "$OHOS_BASE_SDK_HOME" "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/base"
+
+          echo "HOS_SDK_HOME=$HMOS_SDK_HOME" >> $GITHUB_ENV
+          echo "DEVECO_SDK_HOME=$HMOS_SDK_HOME" >> $GITHUB_ENV
           echo "OHOS_SDK_HOME=$OHOS_BASE_SDK_HOME" >> $GITHUB_ENV
+          echo "NODE_HOME=$(dirname "$(dirname "$(command -v node)")")" >> $GITHUB_ENV
           echo "OpenHarmony SDK root: $OHOS_BASE_SDK_HOME"
+          echo "HarmonyOS SDK wrapper: $HMOS_SDK_HOME"
           find "$OHOS_BASE_SDK_HOME" -maxdepth 2 -type d | sort | head -40
+          find "$HMOS_SDK_HOME" -maxdepth 3 \( -type f -o -type l \) | sort
 
       # Step A: Use standard Flutter SDK for pub get (Dart 3.12+ resolves all deps)
       - name: Set up standard Flutter
@@ -93,9 +110,11 @@ jobs:
         run: |
           flutter --version
           echo "HOS_SDK_HOME=$HOS_SDK_HOME"
+          echo "DEVECO_SDK_HOME=$DEVECO_SDK_HOME"
           echo "OHOS_BASE_SDK_HOME=$OHOS_BASE_SDK_HOME"
           echo "OHOS_NDK_HOME=$OHOS_NDK_HOME"
           echo "OHOS_SDK_NATIVE=$OHOS_SDK_NATIVE"
+          echo "NODE_HOME=$NODE_HOME"
           # Fix package_config.json to point to OHOS Flutter SDK
           STD_FLUTTER=$(echo /opt/hostedtoolcache/flutter/stable-*/flutter)
           echo "Replacing $STD_FLUTTER references with /opt/flutter_ohos"
