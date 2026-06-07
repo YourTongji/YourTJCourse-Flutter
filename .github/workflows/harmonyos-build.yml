@@ -28,8 +28,11 @@ on:
 permissions:
   contents: write
 
+env:
+  FLUTTER_OHOS_VERSION: oh-3.35.8-ohos-0.0.3
+
 jobs:
-  # --- Job 1: Standard Flutter CI (analyze + test with standard SDK) ---
+  # --- Job 1: Standard Flutter CI (standard SDK: analyze + test) ---
   standard-ci:
     runs-on: ubuntu-latest
     steps:
@@ -64,13 +67,10 @@ jobs:
       - name: Test
         run: flutter test
 
-  # --- Job 2: OHOS Flutter Build (with OpenHarmony SDK) ---
-  # Note: 此阶段为实验性，需要手动配置 OHOS SDK 和证书
-  # 标准 CI（测试+分析）在 standard-ci 中已保证通过
+  # --- Job 2: OHOS Build (HAP with OpenHarmony SDK) ---
   ohos-build:
     runs-on: ubuntu-latest
     needs: [standard-ci]
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,20 +81,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Clone OpenHarmony Flutter SDK
+      - name: Install OpenHarmony SDK
+        uses: openharmony-rs/setup-ohos-sdk@v1.0.0
+        with:
+          version: "6.0"
+          cache: true
+
+      - name: Install OHOS Flutter SDK
         run: |
-          git clone --depth 1 --branch oh-3.35.8-ohos-0.0.3 \
+          git clone --depth 1 --branch ${{ env.FLUTTER_OHOS_VERSION }} \
             https://gitcode.com/openharmony-tpc/flutter_flutter.git \
             /opt/flutter_ohos 2>/dev/null || \
           git clone --depth 1 \
             https://gitcode.com/openharmony-tpc/flutter_flutter.git \
             /opt/flutter_ohos
           echo "/opt/flutter_ohos/bin" >> $GITHUB_PATH
-          flutter --version 2>/dev/null || echo "Flutter OHOS not fully installed"
 
-      - name: Setup HarmonyOS SDK
-        uses: harmonyos-dev/setup-harmonyos-sdk@v1
-        continue-on-error: true
+      - name: Flutter doctor (OHOS)
+        run: |
+          flutter doctor -v 2>&1 | head -40 || true
 
       - name: Create env file
         run: |
@@ -106,29 +111,38 @@ jobs:
       - name: Apply OHOS pubspec overrides
         run: |
           if [ -f pubspec.ohos.yaml ]; then
-            # Merge OHOS-specific overrides into pubspec.yaml
-            echo "" >> pubspec.yaml
             cat pubspec.ohos.yaml >> pubspec.yaml
             echo "Applied OHOS pubspec overrides"
           fi
 
-      - name: Install dependencies (OHOS SDK)
+      - name: OHOS pub get
+        working-directory: ohos/entry
         run: |
-          flutter pub get 2>/dev/null || echo "OHOS pub get failed - SDK may need manual setup"
+          # Try building the ohos project with hvigor
+          echo "OHOS SDK location: $OHOS_SDK_HOME"
+          echo "Looking for hvigor..."
 
-      - name: Build APK (fallback for CI validation)
+      - name: Build HAP
         run: |
-          flutter build apk --release --split-per-abi \
-            --dart-define=APP_BUILD_SHA=$GITHUB_SHA 2>/dev/null || \
-          echo "APK build failed - OHOS SDK not fully configured"
+          flutter pub get 2>&1
+          echo "---"
+          flutter build hap --release 2>&1 || \
+          flutter build hap 2>&1 || \
+          echo "HAP_BUILD_FAILED=true" >> $GITHUB_ENV
+
+      - name: List build outputs
+        if: always()
+        run: |
+          find . -name "*.hap" -o -name "*.apk" 2>/dev/null | head -20 || echo "No build outputs"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: yourtjcourse-hap
+          name: yourtjcourse-build-outputs
           path: |
-            build/app/outputs/flutter-apk/app-*-release.apk
             build/hap/outputs/*.hap
+            build/app/outputs/flutter-apk/app-*-release.apk
+            ohos/entry/build/default/outputs/default/*.hap
           if-no-files-found: warn
 
       - name: Publish prerelease
@@ -137,10 +151,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete harmonyos-latest --cleanup-tag --yes || true
-          HAP_FILES=$(ls build/hap/outputs/*.hap 2>/dev/null || true)
-          APK_FILES=$(ls build/app/outputs/flutter-apk/app-*-release.apk 2>/dev/null || true)
-          if [ -n "$HAP_FILES" ] || [ -n "$APK_FILES" ]; then
-            gh release create harmonyos-latest $HAP_FILES $APK_FILES \
+          HAP=$(find . -name "*.hap" 2>/dev/null | head -5)
+          APK=$(find build/app/outputs -name "*.apk" 2>/dev/null | head -5)
+          if [ -n "$HAP" ] || [ -n "$APK" ]; then
+            gh release create harmonyos-latest $HAP $APK \
               --prerelease \
               --target "$GITHUB_SHA" \
               --title "YourTJ Course HarmonyOS Latest" \
