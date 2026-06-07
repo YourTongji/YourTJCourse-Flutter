@@ -74,9 +74,9 @@ jobs:
           flutter pub get
 
       # Step B: Switch to OHOS Flutter SDK for HAP build
-      - name: Install OHOS Flutter SDK (oh-3.41.9-dev)
+      - name: Install OHOS Flutter SDK (3.41.10 / Dart 3.11.1)
         run: |
-          git clone --depth 1 --branch oh-3.41.9-dev \
+          git clone --depth 1 --branch 3.41.10-ohos-0.0.1-canary1 \
             https://gitcode.com/openharmony-tpc/flutter_flutter.git \
             /opt/flutter_ohos
           echo "FLUTTER_ROOT=/opt/flutter_ohos" >> $GITHUB_ENV
