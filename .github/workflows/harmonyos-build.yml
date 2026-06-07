@@ -60,27 +60,27 @@ jobs:
 
       - name: Export OHOS SDK variables
         run: |
-          HMOS_SDK_HOME="$RUNNER_TEMP/harmonyos-sdk"
-          HMOS_SDK_VERSION="HarmonyOS-NEXT"
-          mkdir -p "$HMOS_SDK_HOME/$HMOS_SDK_VERSION"
-          cat > "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/sdk-pkg.json" <<'EOF'
-          {
-            "data": {
-              "apiVersion": "12"
-            }
-          }
-          EOF
-          ln -s "$OHOS_BASE_SDK_HOME" "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/openharmony"
-          ln -s "$OHOS_BASE_SDK_HOME" "$HMOS_SDK_HOME/$HMOS_SDK_VERSION/base"
+          REAL_OHOS_SDK_HOME="$OHOS_BASE_SDK_HOME"
+          OHOS_WRAPPED_SDK_HOME="$RUNNER_TEMP/openharmony-sdk"
+          OHOS_API_VERSION="$(jq -r .apiVersion "$REAL_OHOS_SDK_HOME/native/oh-uni-package.json")"
+          mkdir -p "$OHOS_WRAPPED_SDK_HOME/$OHOS_API_VERSION"
 
-          echo "HOS_SDK_HOME=$HMOS_SDK_HOME" >> $GITHUB_ENV
-          echo "DEVECO_SDK_HOME=$HMOS_SDK_HOME" >> $GITHUB_ENV
-          echo "OHOS_SDK_HOME=$OHOS_BASE_SDK_HOME" >> $GITHUB_ENV
+          for component in ets js native previewer toolchains; do
+            ln -s "$REAL_OHOS_SDK_HOME/$component" \
+              "$OHOS_WRAPPED_SDK_HOME/$OHOS_API_VERSION/$component"
+          done
+
+          echo "OHOS_BASE_SDK_HOME=$OHOS_WRAPPED_SDK_HOME" >> $GITHUB_ENV
+          echo "OHOS_SDK_HOME=$OHOS_WRAPPED_SDK_HOME" >> $GITHUB_ENV
+          echo "OHOS_NDK_HOME=$OHOS_WRAPPED_SDK_HOME" >> $GITHUB_ENV
+          echo "OHOS_SDK_NATIVE=$OHOS_WRAPPED_SDK_HOME/$OHOS_API_VERSION/native" >> $GITHUB_ENV
+          echo "HOS_SDK_HOME=" >> $GITHUB_ENV
+          echo "DEVECO_SDK_HOME=" >> $GITHUB_ENV
           echo "NODE_HOME=$(dirname "$(dirname "$(command -v node)")")" >> $GITHUB_ENV
-          echo "OpenHarmony SDK root: $OHOS_BASE_SDK_HOME"
-          echo "HarmonyOS SDK wrapper: $HMOS_SDK_HOME"
-          find "$OHOS_BASE_SDK_HOME" -maxdepth 2 -type d | sort | head -40
-          find "$HMOS_SDK_HOME" -maxdepth 3 \( -type f -o -type l \) | sort
+          echo "OpenHarmony SDK root: $REAL_OHOS_SDK_HOME"
+          echo "OpenHarmony SDK wrapper: $OHOS_WRAPPED_SDK_HOME"
+          find "$REAL_OHOS_SDK_HOME" -maxdepth 2 -type d | sort | head -40
+          find "$OHOS_WRAPPED_SDK_HOME" -maxdepth 3 \( -type f -o -type l \) | sort
 
       # Step A: Use standard Flutter SDK for pub get with OHOS-specific overrides.
       # The OHOS Flutter SDK uses Dart 3.11.1, while lkcn_ui currently needs
