@@ -172,7 +172,7 @@ jobs:
 
           chmod +x "$RUNNER_TEMP/harmonyos-bin/ohpm" "$RUNNER_TEMP/harmonyos-bin/hvigorw"
           echo "$RUNNER_TEMP/harmonyos-bin" >> $GITHUB_PATH
-          npm install --prefix "$HARMONYOS_HVIGOR_CLI_HOME" --no-save @ohos/hvigor@5.2.2 @ohos/hvigor-ohos-plugin@5.2.2
+          npm install --prefix "$HARMONYOS_HVIGOR_CLI_HOME" --no-save --registry=https://repo.harmonyos.com/npm/ @ohos/hvigor@5.2.2 @ohos/hvigor-ohos-plugin@5.2.2
           "$RUNNER_TEMP/harmonyos-bin/ohpm" --version
           test -f "$HARMONYOS_HVIGOR_CLI_HOME/node_modules/@ohos/hvigor/bin/hvigor.js"
 
