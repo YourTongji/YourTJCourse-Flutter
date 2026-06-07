@@ -20,6 +20,12 @@ class CourseRepository {
     String? query,
     List<String>? departments,
     bool onlyWithReviews = false,
+    String? courseName,
+    String? courseCode,
+    String? teacherName,
+    String? teacherCode,
+    String? campus,
+    String? faculty,
     int page = 1,
     int limit = 20,
     bool includeTotal = false,
@@ -32,6 +38,16 @@ class CourseRepository {
         if (departments != null && departments.isNotEmpty)
           'departments': departments.join(','),
         if (onlyWithReviews) 'onlyWithReviews': 'true',
+        if (courseName != null && courseName.isNotEmpty)
+          'courseName': courseName,
+        if (courseCode != null && courseCode.isNotEmpty)
+          'courseCode': courseCode,
+        if (teacherName != null && teacherName.isNotEmpty)
+          'teacherName': teacherName,
+        if (teacherCode != null && teacherCode.isNotEmpty)
+          'teacherCode': teacherCode,
+        if (campus != null && campus.isNotEmpty) 'campus': campus,
+        if (faculty != null && faculty.isNotEmpty) 'faculty': faculty,
         'page': page,
         'limit': limit.clamp(1, 50),
         if (includeTotal) 'includeTotal': 'true',

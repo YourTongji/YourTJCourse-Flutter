@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yourtjcourse_flutter/domain/models/ai_summary.dart';
 import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
+import 'package:yourtjcourse_flutter/domain/repositories/local_review_store.dart';
 import 'package:yourtjcourse_flutter/domain/models/runtime_state.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
@@ -39,6 +40,38 @@ void main() {
     expect(detail.isIcu, isTrue);
     expect(detail.reviews.single.createdAt, '1772885683');
     expect(detail.reviews.single.sqid, '9');
+    expect(detail.reviews.single.reviewerName, '同学');
+  });
+
+  test('round trips local review entry payload', () {
+    final entry = LocalReviewEntry.fromJson({
+      'course_id': 1,
+      'course_name': '高等数学',
+      'course_code': '100001',
+      'teacher_name': '张老师',
+      'course_rating': 4.5,
+      'review_count': 32,
+      'saved_at': '2026-06-07T12:00:00',
+      'review': {
+        'id': 9,
+        'sqid': 'abc',
+        'course_id': 1,
+        'semester': '2025-2026-1',
+        'rating': 5,
+        'comment': '推荐',
+        'created_at': '2026-06-07T12:00:00',
+        'like_count': 7,
+        'liked': false,
+        'reviewer_name': '同学',
+        'reviewer_avatar': 'https://example.com/avatar.png',
+      },
+    });
+
+    final restored = LocalReviewEntry.fromJson(entry.toJson());
+
+    expect(restored.courseName, '高等数学');
+    expect(restored.review.reviewerAvatar, 'https://example.com/avatar.png');
+    expect(restored.review.rating, 5);
   });
 
   test('decodes AI summary response', () {

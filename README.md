@@ -9,6 +9,15 @@
 </p>
 
 <p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.0.1-0AB5C9?style=flat-square">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Android-0AB5C9?style=flat-square&logo=android&logoColor=white">
+  <img alt="Dart" src="https://img.shields.io/badge/Dart-3-0175C2?style=flat-square&logo=dart&logoColor=white">
+  <img alt="UI" src="https://img.shields.io/badge/UI-Material%203%20%2B%20lkcn__ui-0AB5C9?style=flat-square">
+  <img alt="Architecture" src="https://img.shields.io/badge/architecture-Riverpod-555?style=flat-square">
+  <img alt="License" src="https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square">
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#getting-started">Getting Started</a> •
@@ -23,8 +32,12 @@
 它延续 iOS 版的信息结构与功能边界，同时保留 Flutter 端的移动端设计语言，
 直接调用 Cloudflare Workers 后端 API，当前重点覆盖查课、评课、选课和模拟排课。
 
-> iOS 仓库：[YourTJCourse-iOS](https://github.com/YourTongji/YourTJCourse-iOS)
-> 后端仓库：[YourTJCourse-Serverless](https://github.com/YourTongji/YourTJCourse-Serverless)
+> **YourTJ 产品矩阵** ·
+> [Serverless（后端 API）](https://github.com/YourTongji/YourTJCourse-Serverless) ·
+> [iOS（原生版）](https://github.com/YourTongji/YourTJCourse-iOS) ·
+> [Credit（积分服务）](https://github.com/YourTongji/YourTJ-Credit-Serverless) ·
+> [Captcha（验证服务）](https://github.com/YourTongji/YourTJCaptcha) ·
+> [HomePage（官网）](https://github.com/YourTongji/YourTJ-HomePage)
 
 ## Features
 

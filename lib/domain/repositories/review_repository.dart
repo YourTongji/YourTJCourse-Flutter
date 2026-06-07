@@ -89,6 +89,39 @@ class ReviewRepository {
       decode: CreateReviewResponse.fromJson,
     );
   }
+
+  Future<UpdateReviewResponse> updateReview({
+    required int reviewId,
+    required int rating,
+    required String comment,
+    required String semester,
+    required String captchaToken,
+    String? editToken,
+    String? walletUserHash,
+    String? reviewerName,
+    String? reviewerAvatar,
+    CancelToken? cancelToken,
+  }) {
+    return _client.put(
+      '/api/review/$reviewId',
+      body: {
+        'rating': rating,
+        'comment': comment,
+        'semester': semester,
+        'turnstile_token': captchaToken,
+        if (editToken != null && editToken.trim().isNotEmpty)
+          'edit_token': editToken.trim(),
+        if (walletUserHash != null && walletUserHash.trim().isNotEmpty)
+          'walletUserHash': walletUserHash.trim(),
+        if (reviewerName != null && reviewerName.trim().isNotEmpty)
+          'reviewer_name': reviewerName.trim(),
+        if (reviewerAvatar != null && reviewerAvatar.trim().isNotEmpty)
+          'reviewer_avatar': reviewerAvatar.trim(),
+      },
+      cancelToken: cancelToken,
+      decode: UpdateReviewResponse.fromJson,
+    );
+  }
 }
 
 class CaptchaRepository {
@@ -168,6 +201,17 @@ class CreateReviewResponse {
 
   final bool success;
   final int? reviewId;
+}
+
+class UpdateReviewResponse {
+  const UpdateReviewResponse({required this.success});
+
+  factory UpdateReviewResponse.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return UpdateReviewResponse(success: readBool(map['success']) ?? false);
+  }
+
+  final bool success;
 }
 
 class CaptchaChallenge {

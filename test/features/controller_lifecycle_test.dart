@@ -252,6 +252,12 @@ class _FakeCourseRepository extends CourseRepository {
     String? query,
     List<String>? departments,
     bool onlyWithReviews = false,
+    String? courseName,
+    String? courseCode,
+    String? teacherName,
+    String? teacherCode,
+    String? campus,
+    String? faculty,
     int page = 1,
     int limit = 20,
     bool includeTotal = false,
@@ -462,5 +468,15 @@ class _FakeSchedulerRepository extends SchedulerRepository {
     CancelToken? cancelToken,
   }) async {
     return const [roughSearchCourse, replacementCourse];
+  }
+
+  @override
+  Future<SchedulerClassReviewInfo> getClassReviewInfo({
+    required String courseCode,
+    String? teacherCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) async {
+    return const SchedulerClassReviewInfo(rating: 4.6, reviewCount: 18);
   }
 }

@@ -119,7 +119,6 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('关于 YourTJ Course'),
-            subtitle: const Text('同济大学选课社区移动端测试应用'),
             onTap: () => _showAbout(context),
           ),
         ],
@@ -293,7 +292,7 @@ class SettingsView extends ConsumerWidget {
       applicationVersion: '0.0.1',
       applicationIcon: Image.asset('assets/images/app_logo.png', width: 56),
       children: [
-        const Text('同济大学选课社区 Flutter Android 测试客户端。'),
+        const Text('YourTJ选课社区安卓客户端'),
         const SizedBox(height: 12),
         _ReleaseUpdateChecker(openLink: _openLink),
       ],

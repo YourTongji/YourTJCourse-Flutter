@@ -11,6 +11,7 @@ import '../../domain/models/course_detail.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
 import '../../domain/repositories/course_repository.dart';
+import '../../domain/repositories/local_review_store.dart';
 import '../../domain/repositories/review_repository.dart';
 
 final courseDetailControllerProvider = AsyncNotifierProvider.autoDispose
@@ -23,6 +24,7 @@ class CourseDetailState {
     required this.detail,
     required this.relatedCourses,
     required this.hiddenReviewIds,
+    required this.favoriteReviewIds,
     this.aiSummary,
     this.aiSummaryError,
     this.isAiSummaryLoading = false,
@@ -32,6 +34,7 @@ class CourseDetailState {
   final CourseDetail detail;
   final RelatedCourses relatedCourses;
   final Set<int> hiddenReviewIds;
+  final Set<int> favoriteReviewIds;
   final AiSummaryData? aiSummary;
   final String? aiSummaryError;
   final bool isAiSummaryLoading;
@@ -47,6 +50,7 @@ class CourseDetailState {
     CourseDetail? detail,
     RelatedCourses? relatedCourses,
     Set<int>? hiddenReviewIds,
+    Set<int>? favoriteReviewIds,
     AiSummaryData? aiSummary,
     String? aiSummaryError,
     bool? isAiSummaryLoading,
@@ -58,6 +62,7 @@ class CourseDetailState {
       detail: detail ?? this.detail,
       relatedCourses: relatedCourses ?? this.relatedCourses,
       hiddenReviewIds: hiddenReviewIds ?? this.hiddenReviewIds,
+      favoriteReviewIds: favoriteReviewIds ?? this.favoriteReviewIds,
       aiSummary: clearAiSummary ? null : aiSummary ?? this.aiSummary,
       aiSummaryError: clearAiSummaryError
           ? null
@@ -74,14 +79,18 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
   final int _courseId;
   late CourseRepository _courseRepository;
   late ReviewRepository _reviewRepository;
+  late LocalReviewStore _localReviewStore;
   late CancelToken _cancelToken;
   late HiddenReviewStore _hiddenReviewStore;
   late String _clientId;
+
+  CourseDetail get currentDetail => state.value!.detail;
 
   @override
   Future<CourseDetailState> build() async {
     _courseRepository = ref.watch(courseRepositoryProvider);
     _reviewRepository = ref.watch(reviewRepositoryProvider);
+    _localReviewStore = ref.watch(localReviewStoreProvider);
     _hiddenReviewStore = const HiddenReviewStore();
     _cancelToken = scopedCancelToken(ref);
     _clientId = await ClientIdStore().loadOrCreate();
@@ -94,10 +103,12 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
       );
       final relatedCourses = await _loadRelatedCourses();
       final hiddenReviewIds = await _hiddenReviewStore.load();
+      final favoriteReviewIds = await _localReviewStore.loadFavoriteIds();
       return CourseDetailState(
         detail: detail,
         relatedCourses: relatedCourses,
         hiddenReviewIds: hiddenReviewIds,
+        favoriteReviewIds: favoriteReviewIds,
       );
     } catch (error) {
       if (isRequestCancellation(error) && state.value != null) {
@@ -230,9 +241,42 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
   Future<void> hideReview(int reviewId) async {
     final current = state.value;
     if (current == null) return;
+    final review = current.detail.reviews
+        .where((item) => item.id == reviewId)
+        .firstOrNull;
     final hidden = {...current.hiddenReviewIds, reviewId};
     await _hiddenReviewStore.save(hidden);
+    if (review != null) {
+      await _localReviewStore.upsertHidden(_entryFor(current, review));
+    }
     state = AsyncData(current.copyWith(hiddenReviewIds: hidden));
+  }
+
+  Future<void> restoreReview(int reviewId) async {
+    final current = state.value;
+    if (current == null) return;
+    final hidden = {...current.hiddenReviewIds}..remove(reviewId);
+    await _hiddenReviewStore.save(hidden);
+    await _localReviewStore.removeHidden(reviewId);
+    state = AsyncData(current.copyWith(hiddenReviewIds: hidden));
+  }
+
+  Future<void> toggleFavorite(int reviewId) async {
+    final current = state.value;
+    if (current == null) return;
+    final review = current.detail.reviews
+        .where((item) => item.id == reviewId)
+        .firstOrNull;
+    if (review == null) return;
+    final favoriteIds = {...current.favoriteReviewIds};
+    if (favoriteIds.contains(reviewId)) {
+      favoriteIds.remove(reviewId);
+      await _localReviewStore.removeFavorite(reviewId);
+    } else {
+      favoriteIds.add(reviewId);
+      await _localReviewStore.upsertFavorite(_entryFor(current, review));
+    }
+    state = AsyncData(current.copyWith(favoriteReviewIds: favoriteIds));
   }
 
   Future<bool> createReview({
@@ -255,11 +299,44 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
         cancelToken: _cancelToken,
       );
       if (!response.success) return false;
+      if (response.reviewId != null) {
+        final current = state.value;
+        if (current != null) {
+          final review = Review(
+            id: response.reviewId!,
+            sqid: response.reviewId!.toString(),
+            courseId: _courseId,
+            semester: semester,
+            rating: rating,
+            comment: comment,
+            createdAt: DateTime.now().toIso8601String(),
+            likeCount: 0,
+            liked: false,
+            reviewerName: reviewerName,
+            reviewerAvatar: reviewerAvatar,
+          );
+          await _localReviewStore.upsertMine(_entryFor(current, review));
+        }
+      }
       ref.invalidateSelf();
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  LocalReviewEntry _entryFor(CourseDetailState current, Review review) {
+    final course = current.detail;
+    return LocalReviewEntry(
+      courseId: course.id,
+      courseName: course.name,
+      courseCode: course.code,
+      teacherName: course.teacherName,
+      courseRating: course.rating,
+      reviewCount: course.reviewCount,
+      review: review,
+      savedAt: DateTime.now().toIso8601String(),
+    );
   }
 }
 

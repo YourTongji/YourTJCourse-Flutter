@@ -45,19 +45,43 @@ class Review {
   final String? reviewerName;
   final String? reviewerAvatar;
 
-  Review copyWith({bool? liked, int? likeCount}) {
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'sqid': sqid,
+      'course_id': courseId,
+      'semester': semester,
+      'rating': rating,
+      'comment': comment,
+      'created_at': createdAt,
+      'like_count': likeCount,
+      'liked': liked,
+      'reviewer_name': reviewerName,
+      'reviewer_avatar': reviewerAvatar,
+    };
+  }
+
+  Review copyWith({
+    String? semester,
+    int? rating,
+    String? comment,
+    int? likeCount,
+    bool? liked,
+    String? reviewerName,
+    String? reviewerAvatar,
+  }) {
     return Review(
       id: id,
       sqid: sqid,
       courseId: courseId,
-      semester: semester,
-      rating: rating,
-      comment: comment,
+      semester: semester ?? this.semester,
+      rating: rating ?? this.rating,
+      comment: comment ?? this.comment,
       createdAt: createdAt,
       likeCount: likeCount ?? this.likeCount,
       liked: liked ?? this.liked,
-      reviewerName: reviewerName,
-      reviewerAvatar: reviewerAvatar,
+      reviewerName: reviewerName ?? this.reviewerName,
+      reviewerAvatar: reviewerAvatar ?? this.reviewerAvatar,
     );
   }
 }

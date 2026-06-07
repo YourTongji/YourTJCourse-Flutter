@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yourtjcourse_flutter/core/network/api_client.dart';
+import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
+import 'package:yourtjcourse_flutter/domain/models/review.dart';
 import 'package:yourtjcourse_flutter/features/announcements/announcement_controller.dart';
+import 'package:yourtjcourse_flutter/features/course_detail/course_detail_view.dart';
 import 'package:yourtjcourse_flutter/main.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
@@ -32,6 +35,7 @@ void main() {
 
     expect(find.text('查课'), findsOneWidget);
     expect(find.text('排课'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
     expect(find.text('更多'), findsOneWidget);
   });
 
@@ -113,6 +117,91 @@ void main() {
     expect(find.text('工程伦理'), findsOneWidget);
     expect(find.text('查询结果 · 1 门'), findsOneWidget);
   });
+
+  testWidgets('keeps all scheduler sidebar actions visible when collapsed', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues({
+      'flutter.de.yourtj.course.scheduler.selected': jsonEncode([
+        ScheduledClass(
+          course: _visibleCourse,
+          classInfo: _visibleClass,
+        ).toJson(),
+      ]),
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          schedulerRepositoryProvider.overrideWithValue(
+            _VisualSchedulerRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: SchedulerView()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.byTooltip('折叠侧栏'));
+    await tester.pumpAndSettle();
+
+    final keys = [
+      const ValueKey('scheduler-sidebar-filter'),
+      const ValueKey('scheduler-sidebar-candidates'),
+      const ValueKey('scheduler-sidebar-selected'),
+      const ValueKey('scheduler-sidebar-timetable'),
+    ];
+
+    for (final key in keys) {
+      final finder = find.byKey(key);
+      expect(finder, findsOneWidget);
+      final rect = tester.getRect(finder);
+      expect(rect.width, greaterThan(40));
+      expect(rect.height, greaterThan(90));
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(568));
+    }
+  });
+
+  testWidgets('renders review share card with web aligned content', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ReviewShareCard(course: _shareCourse, review: _shareReview),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('YOURTJ 选课社区'), findsOneWidget);
+    expect(find.text('程序设计基础'), findsOneWidget);
+    expect(find.text('内容来自 YOURTJ 选课社区'), findsOneWidget);
+    expect(find.text('xk.yourtj.de'), findsOneWidget);
+  });
+
+  testWidgets('generates review share image without widget screenshot', (
+    tester,
+  ) async {
+    final bytes = await tester.runAsync(
+      () => renderReviewShareImage(_shareCourse, _shareReview, pixelRatio: 1),
+    );
+
+    expect(bytes, isNotNull);
+    final png = bytes!;
+    expect(png.length, greaterThan(1024));
+    expect(png.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+  });
 }
 
 class _NoAnnouncementController extends AnnouncementController {
@@ -187,6 +276,16 @@ class _VisualSchedulerRepository extends SchedulerRepository {
     lastLookupSection = section;
     return const [_timeLookupCourse];
   }
+
+  @override
+  Future<SchedulerClassReviewInfo> getClassReviewInfo({
+    required String courseCode,
+    String? teacherCode,
+    String? teacherName,
+    CancelToken? cancelToken,
+  }) async {
+    return const SchedulerClassReviewInfo(rating: 4.4, reviewCount: 12);
+  }
 }
 
 const _timeLookupCourse = SchedulerCourse(
@@ -197,4 +296,38 @@ const _timeLookupCourse = SchedulerCourse(
   courseNature: ['通识选修'],
   campus: ['四平路'],
   classes: [],
+);
+
+const _shareCourse = CourseDetail(
+  id: 1,
+  code: 'CS1001',
+  name: '程序设计基础',
+  rating: 4.6,
+  reviewCount: 12,
+  teacherName: '张老师',
+  department: '电子与信息工程学院',
+  credit: 3,
+  semesters: ['2024-2025-1'],
+  reviews: [_shareReview],
+);
+
+const _shareReview = Review(
+  id: 42,
+  sqid: 'rv42',
+  courseId: 1,
+  semester: '2024-2025-1',
+  rating: 5,
+  comment: '''
+# 课程内容
+**课堂节奏清楚**，作业量适中，适合打基础。
+
+- 实验安排比较稳定
+- 期末复习范围明确
+
+> 推荐给想系统补基础的同学。
+''',
+  createdAt: '2026-06-07T08:00:00Z',
+  likeCount: 3,
+  liked: false,
+  reviewerName: '同济同学',
 );

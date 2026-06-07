@@ -209,6 +209,29 @@ class SchedulerClass {
   final int? status;
 }
 
+class SchedulerClassReviewInfo {
+  const SchedulerClassReviewInfo({
+    required this.rating,
+    required this.reviewCount,
+  });
+
+  final double rating;
+  final int reviewCount;
+
+  String get ratingGrade {
+    if (reviewCount <= 0) return '暂无';
+    if (rating >= 4.5) return '优秀';
+    if (rating >= 4.0) return '推荐';
+    if (rating >= 3.0) return '中等';
+    return '谨慎';
+  }
+
+  String get ratingText {
+    if (reviewCount <= 0) return '暂无评课';
+    return '$ratingGrade ${rating.toStringAsFixed(1)} · $reviewCount 评';
+  }
+}
+
 class TeacherInfo {
   const TeacherInfo({required this.teacherName, required this.teacherCode});
 
