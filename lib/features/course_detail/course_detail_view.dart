@@ -2650,18 +2650,17 @@ String _shareMarkdownText(md.Node node) {
   final children = node.children;
   if (children == null || children.isEmpty) return node.textContent;
 
-  // Preserve inline formatting as markdown syntax.
-  final wrap = switch (node.tag) {
-    'strong' || 'b' => '*',
-    'em' || 'i' => '_',
-    'code' => '`',
-    'del' || 's' => '~~',
-    'a' => null, // handled below
-    _ => null,
-  };
-  if (wrap != null) {
+  // Strip formatting for bold/italic/strikethrough — the Canvas painter
+  // cannot render rich text, so markers would appear literally.
+  if (node.tag == 'strong' || node.tag == 'b' ||
+      node.tag == 'em' || node.tag == 'i' ||
+      node.tag == 'del' || node.tag == 's') {
+    return children.map(_shareMarkdownText).join();
+  }
+  // Keep backticks for inline code so it stands out visually.
+  if (node.tag == 'code') {
     final inner = children.map(_shareMarkdownText).join();
-    return '$wrap$inner$wrap';
+    return '`$inner`';
   }
   if (node.tag == 'a') {
     final inner = children.map(_shareMarkdownText).join().trim();
