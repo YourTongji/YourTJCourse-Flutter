@@ -1937,8 +1937,17 @@ class _ReviewShareImagePainter {
     required double maxWidth,
   }) {
     var height = 0.0;
-    for (final block in blocks) {
-      height += _markdownBlockHeight(block, maxWidth);
+    var i = 0;
+    while (i < blocks.length) {
+      if (blocks[i].type == _ShareMarkdownBlockType.table) {
+        final tableEnd = _findTableEnd(blocks, i);
+        final grouped = blocks.sublist(i, tableEnd);
+        height += _measureTableGroup(grouped);
+        i = tableEnd;
+      } else {
+        height += _markdownBlockHeight(blocks[i], maxWidth);
+        i++;
+      }
     }
     return math.max(28, height);
   }
@@ -1950,10 +1959,138 @@ class _ReviewShareImagePainter {
     required double maxWidth,
   }) {
     var y = offset.dy;
-    for (final block in blocks) {
-      y += _paintMarkdownBlock(canvas, block, Offset(offset.dx, y), maxWidth);
+    var i = 0;
+    while (i < blocks.length) {
+      if (blocks[i].type == _ShareMarkdownBlockType.table) {
+        final tableEnd = _findTableEnd(blocks, i);
+        final grouped = blocks.sublist(i, tableEnd);
+        y += _paintTableGroup(canvas, grouped, Offset(offset.dx, y), maxWidth);
+        i = tableEnd;
+      } else {
+        y += _paintMarkdownBlock(canvas, blocks[i], Offset(offset.dx, y), maxWidth);
+        i++;
+      }
     }
     return y - offset.dy;
+  }
+
+  /// Find the end index of a consecutive run of table blocks starting at [start].
+  int _findTableEnd(List<_ShareMarkdownBlock> blocks, int start) {
+    var end = start + 1;
+    while (end < blocks.length &&
+        blocks[end].type == _ShareMarkdownBlockType.table) {
+      end++;
+    }
+    return end;
+  }
+
+  /// Parse a row text into individual cells (split by the │ separator).
+  List<String> _parseRowCells(String text) {
+    return text.split('│').map((c) => c.trim()).toList(growable: false);
+  }
+
+  /// Compute the height of a grouped table.
+  double _measureTableGroup(List<_ShareMarkdownBlock> rows) {
+    final cells = rows.map((r) => _parseRowCells(r.text)).toList();
+    if (cells.isEmpty || cells.every((c) => c.isEmpty)) return 0;
+    return rows.length * 28.0 + 2;
+  }
+
+  static const _tableBorderWidth = 1.0;
+  static const _tableHeaderBg = Color(0xFFE2E8F0);
+  static const _tableRowEvenBg = Color(0xFFF8FAFC);
+  static const _tableRowOddBg = Color(0xFFFFFFFF);
+  static const _tableBorderColor = Color(0xFFCBD5E1);
+
+  /// Compute max pixel width for each column across all rows.
+  List<double> _computeColWidths(
+    List<List<String>> cells, int colCount, double maxWidth,
+  ) {
+    final widths = List.filled(colCount, 0.0);
+    for (final row in cells) {
+      for (var c = 0; c < row.length && c < colCount; c++) {
+        final p = _layoutText(
+          row[c],
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          maxWidth: maxWidth,
+        );
+        widths[c] = math.max(widths[c], p.width + 12);
+      }
+    }
+    // Clamp total width to maxWidth.
+    final total = widths.fold(0.0, (a, b) => a + b) +
+        (colCount - 1) * _tableBorderWidth;
+    if (total > maxWidth) {
+      final scale = (maxWidth - (colCount - 1) * _tableBorderWidth) /
+          (total - (colCount - 1) * _tableBorderWidth);
+      for (var c = 0; c < colCount; c++) widths[c] *= scale;
+    }
+    return widths;
+  }
+
+  /// Paint a grouped table with proper column alignment.
+  double _paintTableGroup(
+    Canvas canvas,
+    List<_ShareMarkdownBlock> rows,
+    Offset offset,
+    double maxWidth,
+  ) {
+    if (rows.isEmpty) return 0;
+    final cells = rows.map((r) => _parseRowCells(r.text)).toList();
+    final colCount = cells.map((c) => c.length).reduce(math.max);
+    final colWidths = _computeColWidths(cells, colCount, maxWidth);
+    final rowHeight = 28.0;
+
+    for (var r = 0; r < rows.length; r++) {
+      final y = offset.dy + r * rowHeight;
+      final isHeader = r == 0;
+      final bg = isHeader
+          ? _tableHeaderBg
+          : r.isEven
+              ? _tableRowEvenBg
+              : _tableRowOddBg;
+      final rowRect = Rect.fromLTWH(
+        offset.dx, y, colWidths.fold(0.0, (a, b) => a + b) +
+            (colCount - 1) * _tableBorderWidth,
+        rowHeight,
+      );
+      canvas.drawRect(rowRect, Paint()..color = bg);
+
+      // Draw cell text and vertical borders.
+      var x = offset.dx;
+      for (var c = 0; c < colCount; c++) {
+        final cellText = c < cells[r].length ? cells[r][c] : '';
+        final cellStyle = TextStyle(
+          fontSize: 13,
+          fontWeight: isHeader ? FontWeight.w800 : FontWeight.w500,
+          color: isHeader ? const Color(0xFF0F172A) : const Color(0xFF334155),
+        );
+        final p = _layoutText(cellText, cellStyle, maxWidth: colWidths[c] - 8);
+        p.paint(canvas, Offset(x + 4, y + (rowHeight - p.height) / 2));
+
+        x += colWidths[c];
+        if (c < colCount - 1) {
+          canvas.drawLine(
+            Offset(x, y + 2), Offset(x, y + rowHeight - 2),
+            Paint()
+              ..color = _tableBorderColor.withValues(alpha: 0.5)
+              ..strokeWidth = _tableBorderWidth,
+          );
+          x += _tableBorderWidth;
+        }
+      }
+
+      // Row separator line.
+      canvas.drawLine(
+        Offset(offset.dx, y + rowHeight),
+        Offset(offset.dx + rowRect.width, y + rowHeight),
+        Paint()
+          ..color = _tableBorderColor
+          ..strokeWidth = 0.5,
+      );
+    }
+
+    return rows.length * rowHeight + 2;
   }
 
   double _markdownBlockHeight(
