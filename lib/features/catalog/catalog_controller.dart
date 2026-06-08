@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,7 +130,8 @@ class CatalogController extends AsyncNotifier<CatalogState> {
       final results = await Future.wait([departmentsFuture, coursesFuture]);
       final departments = results[0] as List<String>;
       final courses = results[1] as dynamic;
-      final data = courses.data as List<Course>;
+      final data = (courses.data as List<Course>).toList(growable: false)
+        ..shuffle(math.Random());
       final total = courses.total as int?;
       return CatalogState(
         departments: departments,
@@ -197,9 +199,17 @@ class CatalogController extends AsyncNotifier<CatalogState> {
   }
 
   void setSearchText(String text) {
+    const maxLength = 50;
+    if (text.length > maxLength) {
+      text = text.substring(0, maxLength);
+    }
     final value = state.value ?? const CatalogState();
     state = AsyncData(value.copyWith(searchText: text));
     _searchDebounce?.cancel();
+    if (text.isEmpty) {
+      refresh();
+      return;
+    }
     _searchDebounce = Timer(const Duration(milliseconds: 300), refresh);
   }
 

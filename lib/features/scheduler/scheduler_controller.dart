@@ -807,6 +807,21 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     return current.selected.map((s) => s.course.courseCode).toSet();
   }
 
+  /// Remove all scheduled classes for the given [courseCode] from the schedule.
+  void unscheduleCourse(String courseCode) {
+    final current = state.value;
+    if (current == null) return;
+    final remaining = current.selected
+        .where((s) => s.course.courseCode != courseCode)
+        .toList(growable: false);
+    state = AsyncData(current.copyWith(
+      selected: remaining,
+      notice: '已清除「$courseCode」的排课状态',
+    ));
+    _persistSelectedClasses(remaining);
+    unawaited(_updateSnapshotsAndSync());
+  }
+
   // ─── Course change detection ──────────────────────────────────────
 
   static const _snapshotKey = 'de.yourtj.course.scheduler.snapshots';
