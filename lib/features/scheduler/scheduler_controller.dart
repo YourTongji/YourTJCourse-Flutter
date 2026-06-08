@@ -209,7 +209,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
 
       final targetCalendarId =
           (hasSaved && calendars.any((c) => c.calendarId == savedCalendarId))
-              ? savedCalendarId!
+              ? savedCalendarId
               : calendarId;
 
       final results = await Future.wait([
@@ -235,10 +235,10 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
 
       // Auto-load major courses when returning user has saved selections.
       if (hasSaved && grades.contains(savedGrade)) {
-        final code = savedMajorCode!;
+        final code = savedMajorCode;
         final majors = await _repository.findMajorByGrade(
           calendarId: targetCalendarId,
-          grade: savedGrade!,
+          grade: savedGrade,
           cancelToken: _cancelToken,
         );
         final matchedMajor = majors.where((m) => m.code == code).firstOrNull;
@@ -790,15 +790,6 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<void> _persistMajorSelection(String code) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_majorKey, code);
-  }
-
-  void _clearMajorSelection() {
-    unawaited(_clearMajorSelectionAsync());
-  }
-
-  Future<void> _clearMajorSelectionAsync() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_majorKey);
   }
 
   Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {
