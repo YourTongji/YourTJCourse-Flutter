@@ -55,90 +55,120 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
           ),
         ],
       ),
-      body: catalog.when(
-        loading: () => const LoadingState(message: '正在加载课程'),
-        error: (error, _) =>
-            ErrorState(message: error.toString(), onRetry: controller.refresh),
-        data: (state) {
-          return RefreshIndicator(
-            onRefresh: controller.refresh,
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SearchBar(
-                          controller: _searchController,
-                          hintText: '搜索课程、教师或课程号',
-                          leading: const Icon(Icons.search),
-                          trailing: [
-                            IconButton(
-                              tooltip: '高级筛选',
-                              onPressed: () => _showFilterSheet(context, ref),
-                              icon: Icon(
-                                state.hasAdvancedFilters
-                                    ? Icons.filter_alt
-                                    : Icons.filter_alt_outlined,
-                              ),
-                            ),
-                          ],
-                          onChanged: controller.setSearchText,
-                        ),
-                        if (state.hasAdvancedFilters) ...[
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              if (state.onlyWithReviews)
-                                const _ActiveFilterChip(label: '只看有评价'),
-                              if (state.courseName.isNotEmpty)
-                                _ActiveFilterChip(
-                                  label: '课名 ${state.courseName}',
-                                ),
-                              if (state.courseCode.isNotEmpty)
-                                _ActiveFilterChip(
-                                  label: '课号 ${state.courseCode}',
-                                ),
-                              if (state.teacherName.isNotEmpty)
-                                _ActiveFilterChip(
-                                  label: '教师 ${state.teacherName}',
-                                ),
-                              if (state.teacherCode.isNotEmpty)
-                                _ActiveFilterChip(
-                                  label: '工号 ${state.teacherCode}',
-                                ),
-                              if (state.campus.isNotEmpty)
-                                _ActiveFilterChip(label: '校区 ${state.campus}'),
-                              if (state.faculty.isNotEmpty)
-                                _ActiveFilterChip(label: '院系 ${state.faculty}'),
-                              for (final department
-                                  in state.selectedDepartments.take(3))
-                                _ActiveFilterChip(label: department),
-                              if (state.selectedDepartments.length > 3)
-                                _ActiveFilterChip(
-                                  label:
-                                      '另 ${state.selectedDepartments.length - 3} 个院系',
-                                ),
-                            ],
+      body: RefreshIndicator(
+        onRefresh: controller.refresh,
+        child: CustomScrollView(
+          slivers: [
+            // SearchBar + filters — always rendered regardless of state,
+            // so the TextEditingController never loses its text.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SearchBar(
+                      controller: _searchController,
+                      hintText: '搜索课程、教师或课程号',
+                      leading: const Icon(Icons.search),
+                      trailing: [
+                        IconButton(
+                          tooltip: '高级筛选',
+                          onPressed: () => _showFilterSheet(context, ref),
+                          icon: Icon(
+                            catalog.maybeWhen(
+                              data: (s) => s.hasAdvancedFilters,
+                              orElse: () => false,
+                            )
+                                ? Icons.filter_alt
+                                : Icons.filter_alt_outlined,
                           ),
-                        ],
+                        ),
                       ],
+                      onChanged: controller.setSearchText,
                     ),
+                    catalog.maybeWhen(
+                      data: (state) => state.hasAdvancedFilters
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  if (state.onlyWithReviews)
+                                    const _ActiveFilterChip(label: '只看有评价'),
+                                  if (state.courseName.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '课名 ${state.courseName}',
+                                    ),
+                                  if (state.courseCode.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '课号 ${state.courseCode}',
+                                    ),
+                                  if (state.teacherName.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '教师 ${state.teacherName}',
+                                    ),
+                                  if (state.teacherCode.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '工号 ${state.teacherCode}',
+                                    ),
+                                  if (state.campus.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '校区 ${state.campus}',
+                                    ),
+                                  if (state.faculty.isNotEmpty)
+                                    _ActiveFilterChip(
+                                      label: '院系 ${state.faculty}',
+                                    ),
+                                  for (final department
+                                      in state.selectedDepartments.take(3))
+                                    _ActiveFilterChip(label: department),
+                                  if (state.selectedDepartments.length > 3)
+                                    _ActiveFilterChip(
+                                      label:
+                                          '另 ${state.selectedDepartments.length - 3} 个院系',
+                                    ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Content depends on catalog state
+            ...catalog.when(
+              loading: () => [
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: LoadingState(message: '正在加载课程'),
+                ),
+              ],
+              error: (error, _) => [
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: ErrorState(
+                    message: error.toString(),
+                    onRetry: controller.refresh,
                   ),
                 ),
-                if (state.courses.isEmpty)
-                  const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: EmptyState(
-                      message: '暂无匹配课程',
-                      icon: Icons.school_outlined,
+              ],
+              data: (state) {
+                if (state.courses.isEmpty) {
+                  return [
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyState(
+                        message: '暂无匹配课程',
+                        icon: Icons.school_outlined,
+                      ),
                     ),
-                  )
-                else
+                  ];
+                }
+                return [
                   SliverList.builder(
                     itemCount: state.courses.length + (state.hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
@@ -156,10 +186,11 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
                       );
                     },
                   ),
-              ],
+                ];
+              },
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
