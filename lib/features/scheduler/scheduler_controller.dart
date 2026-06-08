@@ -495,6 +495,18 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
+  /// Clear search/time results and restore major/optional courses list.
+  void resetSearch() {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(
+      searchText: '',
+      searchCourses: const [],
+      timeCourses: const [],
+      clearNotice: true,
+    ));
+  }
+
   Future<void> findByTime({required int day, required int section}) async {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;

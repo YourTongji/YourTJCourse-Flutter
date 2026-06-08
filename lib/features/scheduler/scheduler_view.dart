@@ -79,6 +79,7 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
   var _activeSection = 0;
   var _sidebarCollapsed = false;
   final _bodyScrollController = ScrollController();
+  final _resultsKey = GlobalKey();
 
   @override
   void dispose() {
@@ -160,6 +161,7 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
         _OptionalCandidatesSection(state: state, controller: controller),
         const SizedBox(height: 12),
         _ResultsSection(
+          key: _resultsKey,
           title: _resultTitle(state),
           state: state,
           controller: controller,
@@ -203,14 +205,18 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
     await widget.controller.findByTime(day: day, section: lookupSection);
     if (!mounted) return;
     setState(() => _activeSection = 1);
-    // Scroll to the bottom where results are shown.
+    // Scroll to the results section card.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _bodyScrollController.animateTo(
-        _bodyScrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
+      final context = _resultsKey.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.05, // small top padding
+        );
+      }
     });
   }
 }
@@ -571,12 +577,8 @@ class _SearchSectionState extends State<_SearchSection> {
         _courseCode.trim().isNotEmpty ||
         _teacherName.trim().isNotEmpty;
     if (!hasAny) {
-      // All fields cleared — reset search results immediately.
-      widget.controller.search(
-        courseName: '',
-        courseCode: '',
-        teacherName: '',
-      );
+      // All fields cleared — restore major/optional course lists.
+      widget.controller.resetSearch();
     }
   }
 
@@ -922,7 +924,7 @@ class _TimetableSection extends StatelessWidget {
 }
 
 class _ResultsSection extends StatelessWidget {
-  const _ResultsSection({
+  const _ResultsSection({super.key,
     required this.title,
     required this.state,
     required this.controller,
