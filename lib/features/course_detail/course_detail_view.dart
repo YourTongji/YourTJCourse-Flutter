@@ -1989,13 +1989,6 @@ class _ReviewShareImagePainter {
     return text.split('│').map((c) => c.trim()).toList(growable: false);
   }
 
-  /// Compute the height of a grouped table.
-  double _measureTableGroup(List<_ShareMarkdownBlock> rows) {
-    final cells = rows.map((r) => _parseRowCells(r.text)).toList();
-    if (cells.isEmpty || cells.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
-    return rows.length * 28.0 + 2;
-  }
-
   static const _tableBorderWidth = 1.0;
   static const _tableHeaderBg = Color(0xFFE2E8F0);
   static const _tableRowEvenBg = Color(0xFFF8FAFC);
@@ -2031,7 +2024,36 @@ class _ReviewShareImagePainter {
     return widths;
   }
 
-  /// Paint a grouped table with proper column alignment.
+  /// Measure actual text height for a cell wrapped at [cellWidth].
+  double _cellHeight(String text, double cellWidth) {
+    final p = _layoutText(text, const TextStyle(fontSize: 13), maxWidth: math.max(cellWidth - 8, 4));
+    return p.height + 8; // 4px top + 4px bottom padding
+  }
+
+  /// Compute row heights for a table given column widths.
+  List<double> _computeRowHeights(
+    List<List<String>> cells, List<double> colWidths, int colCount,
+  ) {
+    return cells.map((row) {
+      var maxH = 24.0;
+      for (var c = 0; c < row.length && c < colCount; c++) {
+        maxH = math.max(maxH, _cellHeight(row[c], colWidths[c]));
+      }
+      return maxH;
+    }).toList(growable: false);
+  }
+
+  /// Compute the height of a grouped table with variable row heights.
+  double _measureTableGroup(List<_ShareMarkdownBlock> rows) {
+    final cellList = rows.map((r) => _parseRowCells(r.text)).toList();
+    if (cellList.isEmpty || cellList.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
+    final colCount = cellList.map((c) => c.length).reduce(math.max);
+    final colWidths = _computeColWidths(cellList, colCount, 540.0);
+    final rowHs = _computeRowHeights(cellList, colWidths, colCount);
+    return rowHs.fold(0.0, (a, b) => a + b) + 2;
+  }
+
+  /// Paint a grouped table with proper column alignment and auto-wrapping rows.
   double _paintTableGroup(
     Canvas canvas,
     List<_ShareMarkdownBlock> rows,
@@ -2043,10 +2065,13 @@ class _ReviewShareImagePainter {
     if (cells.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
     final colCount = cells.map((c) => c.length).reduce(math.max);
     final colWidths = _computeColWidths(cells, colCount, maxWidth);
-    final rowHeight = 28.0;
+    final rowHeights = _computeRowHeights(cells, colWidths, colCount);
+    final totalWidth = colWidths.fold(0.0, (a, b) => a + b) +
+        (colCount - 1) * _tableBorderWidth;
 
+    var yOff = offset.dy;
     for (var r = 0; r < rows.length; r++) {
-      final y = offset.dy + r * rowHeight;
+      final rowH = rowHeights[r];
       final isHeader = r == 0;
       final bg = isHeader
           ? _tableHeaderBg
@@ -2054,13 +2079,11 @@ class _ReviewShareImagePainter {
               ? _tableRowEvenBg
               : _tableRowOddBg;
       final rowRect = Rect.fromLTWH(
-        offset.dx, y, colWidths.fold(0.0, (a, b) => a + b) +
-            (colCount - 1) * _tableBorderWidth,
-        rowHeight,
+        offset.dx, yOff, totalWidth, rowH,
       );
       canvas.drawRect(rowRect, Paint()..color = bg);
 
-      // Draw cell text and vertical borders.
+      // Draw cell text with wrapping and vertical borders.
       var x = offset.dx;
       for (var c = 0; c < colCount; c++) {
         final cellText = c < cells[r].length ? cells[r][c] : '';
@@ -2069,13 +2092,14 @@ class _ReviewShareImagePainter {
           fontWeight: isHeader ? FontWeight.w800 : FontWeight.w500,
           color: isHeader ? const Color(0xFF0F172A) : const Color(0xFF334155),
         );
-        final p = _layoutText(cellText, cellStyle, maxWidth: colWidths[c] - 8);
-        p.paint(canvas, Offset(x + 4, y + (rowHeight - p.height) / 2));
+        final cellW = math.max(colWidths[c] - 8, 4.0);
+        final p = _layoutText(cellText, cellStyle, maxWidth: cellW);
+        p.paint(canvas, Offset(x + 4, yOff + 4));
 
         x += colWidths[c];
         if (c < colCount - 1) {
           canvas.drawLine(
-            Offset(x, y + 2), Offset(x, y + rowHeight - 2),
+            Offset(x, yOff + 2), Offset(x, yOff + rowH - 2),
             Paint()
               ..color = _tableBorderColor.withValues(alpha: 0.5)
               ..strokeWidth = _tableBorderWidth,
@@ -2086,15 +2110,17 @@ class _ReviewShareImagePainter {
 
       // Row separator line.
       canvas.drawLine(
-        Offset(offset.dx, y + rowHeight),
-        Offset(offset.dx + rowRect.width, y + rowHeight),
+        Offset(offset.dx, yOff + rowH),
+        Offset(offset.dx + totalWidth, yOff + rowH),
         Paint()
           ..color = _tableBorderColor
           ..strokeWidth = 0.5,
       );
+
+      yOff += rowH;
     }
 
-    return rows.length * rowHeight + 2;
+    return yOff - offset.dy + 2;
   }
 
   double _markdownBlockHeight(
