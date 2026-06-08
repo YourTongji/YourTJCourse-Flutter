@@ -2245,33 +2245,299 @@ class _CourseResultRowState extends State<_CourseResultRow> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.76,
-        minChildSize: 0.4,
-        maxChildSize: 0.94,
-        builder: (context, scrollController) => ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          children: [
-            Text(
-              course.courseName,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            for (final classInfo in course.classes)
-              _ClassDetail(
-                course: course,
-                classInfo: classInfo,
-                controller: widget.controller,
-              ),
-          ],
-        ),
+      builder: (context) => _ClassSelectionSheet(
+        course: course,
+        controller: widget.controller,
       ),
     );
   }
+}
+
+class _ClassSelectionSheet extends StatefulWidget {
+  const _ClassSelectionSheet({
+    required this.course,
+    required this.controller,
+  });
+
+  final SchedulerCourse course;
+  final SchedulerController controller;
+
+  @override
+  State<_ClassSelectionSheet> createState() => _ClassSelectionSheetState();
+}
+
+class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
+  // Filter state
+  final _selectedCampuses = <String>{};
+  var _ratingFilter = 0; // 0=all, 1>=4.0, 2>=3.0, 3<3.0
+  final _selectedDays = <int>{};
+  final _reviewCache = <String, SchedulerClassReviewInfo>{};
+
+  late final List<String> _campusOptions;
+  late final List<_DayOption> _dayOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    final allClasses = widget.course.classes;
+    _campusOptions = allClasses
+        .map((c) => c.campus)
+        .where((c) => c.isNotEmpty)
+        .toSet()
+        .toList(growable: false)
+      ..sort();
+
+    final daySet = <int>{};
+    for (final c in allClasses) {
+      for (final a in c.arrangements) {
+        if (a.occupyDay >= 1 && a.occupyDay <= 7) daySet.add(a.occupyDay);
+      }
+    }
+    _dayOptions = daySet.map((d) => _DayOption(d)).toList(growable: false)
+      ..sort((a, b) => a.day.compareTo(b.day));
+
+    // Pre-load review info for rating-filtered views.
+    _preloadReviews();
+  }
+
+  Future<void> _preloadReviews() async {
+    for (final classInfo in widget.course.classes) {
+      final code = classInfo.code;
+      if (_reviewCache.containsKey(code)) continue;
+      try {
+        final info = await widget.controller.loadClassReviewInfo(
+          widget.course,
+          classInfo,
+        );
+        if (!mounted) return;
+        setState(() => _reviewCache[code] = info);
+      } catch (_) {
+        // Silently skip failed review loads.
+      }
+    }
+  }
+
+  List<SchedulerClass> get _filteredClasses {
+    return widget.course.classes.where((classInfo) {
+      // Campus filter
+      if (_selectedCampuses.isNotEmpty &&
+          !_selectedCampuses.contains(classInfo.campus)) {
+        return false;
+      }
+
+      // Rating filter
+      if (_ratingFilter > 0) {
+        final review = _reviewCache[classInfo.code];
+        if (review == null || review.reviewCount <= 0) return false;
+        final rating = review.rating;
+        if (_ratingFilter == 1 && rating < 4.0) return false;
+        if (_ratingFilter == 2 && rating < 3.0) return false;
+        if (_ratingFilter == 3 && rating >= 3.0) return false;
+      }
+
+      // Day filter
+      if (_selectedDays.isNotEmpty) {
+        final classDays = classInfo.arrangements
+            .map((a) => a.occupyDay)
+            .where((d) => d >= 1 && d <= 7)
+            .toSet();
+        if (classDays.isEmpty || !classDays.any(_selectedDays.contains)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList(growable: false);
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedCampuses.isNotEmpty ||
+      _ratingFilter > 0 ||
+      _selectedDays.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final filtered = _filteredClasses;
+    final total = widget.course.classes.length;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.82,
+      minChildSize: 0.42,
+      maxChildSize: 0.94,
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        children: [
+          // Title row with active-filter badge
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.course.courseName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (_hasActiveFilters)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      '${filtered.length}/$total',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // -- Rating filter: segmented control --
+          SizedBox(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('全部')),
+                  ButtonSegment(value: 1, label: Text('推荐+')),
+                  ButtonSegment(value: 2, label: Text('中等+')),
+                  ButtonSegment(value: 3, label: Text('谨慎')),
+                ],
+                selected: {_ratingFilter},
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  ),
+                ),
+                onSelectionChanged: (value) =>
+                    setState(() => _ratingFilter = value.single),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // -- Campus filter: horizontal chips --
+          if (_campusOptions.isNotEmpty)
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _campusOptions.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final campus = _campusOptions[index];
+                  final selected = _selectedCampuses.contains(campus);
+                  return FilterChip(
+                    label: Text(campus, style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          _selectedCampuses.add(campus);
+                        } else {
+                          _selectedCampuses.remove(campus);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // -- Day filter: horizontal chips --
+          if (_dayOptions.isNotEmpty)
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _dayOptions.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final option = _dayOptions[index];
+                  final selected = _selectedDays.contains(option.day);
+                  return FilterChip(
+                    label:
+                        Text(option.label, style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          _selectedDays.add(option.day);
+                        } else {
+                          _selectedDays.remove(option.day);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // -- Filtered class list --
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  '没有匹配筛选条件的教学班',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            )
+          else
+            for (final classInfo in filtered)
+              _ClassDetail(
+                course: widget.course,
+                classInfo: classInfo,
+                controller: widget.controller,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayOption {
+  const _DayOption(this.day);
+
+  final int day;
+
+  String get label => const [
+        '',
+        '周一',
+        '周二',
+        '周三',
+        '周四',
+        '周五',
+        '周六',
+        '周日',
+      ][day];
 }
 
 class _ClassDetail extends StatelessWidget {
