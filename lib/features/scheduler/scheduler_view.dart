@@ -2102,8 +2102,8 @@ class _CourseResultRow extends StatefulWidget {
 
 	  /// Whether any teaching class of this course is already in the schedule.
 	  bool get _isScheduled {
-	    final selected = widget.controller.state.value?.selected ?? const [];
-	    return selected.any((s) => s.course.courseCode == widget.course.courseCode);
+	    final scheduledCodes = widget.controller.scheduledCourseCodes();
+	    return scheduledCodes.contains(widget.course.courseCode);
 	  }
 
 	  @override

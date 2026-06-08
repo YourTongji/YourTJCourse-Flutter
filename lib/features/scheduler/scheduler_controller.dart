@@ -792,6 +792,14 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     await prefs.setString(_majorKey, code);
   }
 
+  /// Returns the set of course codes that already have at least one
+  /// teaching class in the current schedule.
+  Set<String> scheduledCourseCodes() {
+    final current = state.value;
+    if (current == null) return const {};
+    return current.selected.map((s) => s.course.courseCode).toSet();
+  }
+
   Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {
     final preferences = await SharedPreferences.getInstance();
     if (selected.isEmpty) {
