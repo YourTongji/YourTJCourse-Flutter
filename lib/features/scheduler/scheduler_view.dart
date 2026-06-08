@@ -110,6 +110,10 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
               children: [
                 _SchedulerHero(state: state),
+                if (state.courseChanges.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _CourseChangeBanner(changes: state.courseChanges),
+                ],
                 if (state.notice != null) ...[
                   const SizedBox(height: 10),
                   _NoticeStrip(text: state.notice!),
@@ -2875,6 +2879,63 @@ class _MiniLoader extends StatelessWidget {
       child: CircularProgressIndicator(
         strokeWidth: 2,
         color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+}
+
+class _CourseChangeBanner extends StatelessWidget {
+  const _CourseChangeBanner({required this.changes});
+
+  final List<CourseChange> changes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final closedCount = changes.where((c) => c.type == CourseChangeType.closed).length;
+    final changedCount = changes.where((c) => c.type == CourseChangeType.infoChanged).length;
+    final parts = <String>[];
+    if (closedCount > 0) parts.add('$closedCount 个教学班已关闭');
+    if (changedCount > 0) parts.add('$changedCount 个教学班安排有变动');
+    final summary = parts.join('，');
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 18, color: scheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '课程数据有变动',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    summary,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
