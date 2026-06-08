@@ -24,7 +24,7 @@ class SettingsView extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                Image.asset('assets/images/app_logo.png', width: 56),
+                ClipOval(child: Image.asset('assets/images/app_logo.png', width: 56)),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Column(
@@ -290,7 +290,7 @@ class SettingsView extends ConsumerWidget {
       context: context,
       applicationName: 'YourTJ Course',
       applicationVersion: '0.0.1',
-      applicationIcon: Image.asset('assets/images/app_logo.png', width: 56),
+      applicationIcon: ClipOval(child: Image.asset('assets/images/app_logo.png', width: 56)),
       children: [
         const Text('YourTJ选课社区安卓客户端'),
         const SizedBox(height: 12),

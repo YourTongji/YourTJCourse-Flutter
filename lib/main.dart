@@ -358,10 +358,12 @@ class _LogoPulseState extends State<_LogoPulse>
           child: Transform.scale(scale: scale, child: child),
         );
       },
-      child: Image.asset(
-        'assets/images/app_logo.png',
-        width: widget.size,
-        height: widget.size,
+      child: ClipOval(
+        child: Image.asset(
+          'assets/images/app_logo.png',
+          width: widget.size,
+          height: widget.size,
+        ),
       ),
     );
   }
@@ -448,7 +450,7 @@ class _AnnouncementGateState extends ConsumerState<_AnnouncementGate> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          icon: Image.asset('assets/images/app_logo.png', height: 52),
+          icon: ClipOval(child: Image.asset('assets/images/app_logo.png', height: 52)),
           title: Text(announcement.title, textAlign: TextAlign.center),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 320),
