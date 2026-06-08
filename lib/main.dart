@@ -13,6 +13,7 @@ import 'features/course_detail/course_detail_view.dart';
 import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
+import 'features/update/auto_update_gate.dart';
 import 'domain/models/runtime_state.dart';
 
 Future<void> main() async {
@@ -171,17 +172,19 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AnnouncementGate(
-      child: _SplashGate(
-        child: Scaffold(
-          body: navigationShell,
-          bottomNavigationBar: _AppNavigationBar(
-            active: navigationShell.currentIndex,
-            onChange: (index) {
-              navigationShell.goBranch(
-                index,
-                initialLocation: index == navigationShell.currentIndex,
-              );
-            },
+      child: AutoUpdateGate(
+        child: _SplashGate(
+          child: Scaffold(
+            body: navigationShell,
+            bottomNavigationBar: _AppNavigationBar(
+              active: navigationShell.currentIndex,
+              onChange: (index) {
+                navigationShell.goBranch(
+                  index,
+                  initialLocation: index == navigationShell.currentIndex,
+                );
+              },
+            ),
           ),
         ),
       ),
