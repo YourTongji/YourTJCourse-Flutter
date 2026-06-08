@@ -78,6 +78,13 @@ class _SchedulerBody extends StatefulWidget {
 class _SchedulerBodyState extends State<_SchedulerBody> {
   var _activeSection = 0;
   var _sidebarCollapsed = false;
+  final _bodyScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _bodyScrollController.dispose();
+    super.dispose();
+  }
 
   static const _sections = [
     LkcnCategoryItem(text: '筛选', icon: Icons.tune_outlined),
@@ -107,6 +114,7 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
           ),
           Expanded(
             child: ListView(
+              controller: _bodyScrollController,
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
               children: [
                 _SchedulerHero(state: state),
@@ -195,6 +203,15 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
     await widget.controller.findByTime(day: day, section: lookupSection);
     if (!mounted) return;
     setState(() => _activeSection = 1);
+    // Scroll to the bottom where results are shown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _bodyScrollController.animateTo(
+        _bodyScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 }
 
@@ -549,6 +566,20 @@ class _SearchSectionState extends State<_SearchSection> {
   String _courseCode = '';
   String _teacherName = '';
 
+  void _onFieldChanged() {
+    final hasAny = _courseName.trim().isNotEmpty ||
+        _courseCode.trim().isNotEmpty ||
+        _teacherName.trim().isNotEmpty;
+    if (!hasAny) {
+      // All fields cleared — reset search results immediately.
+      widget.controller.search(
+        courseName: '',
+        courseCode: '',
+        teacherName: '',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
@@ -560,20 +591,29 @@ class _SearchSectionState extends State<_SearchSection> {
           _InputRow(
             icon: Icons.menu_book_outlined,
             label: '课程名',
-            onChanged: (value) => setState(() => _courseName = value),
+            onChanged: (value) {
+              setState(() => _courseName = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 8),
           _InputRow(
             icon: Icons.confirmation_number_outlined,
             label: '课号',
             textCapitalization: TextCapitalization.characters,
-            onChanged: (value) => setState(() => _courseCode = value),
+            onChanged: (value) {
+              setState(() => _courseCode = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 8),
           _InputRow(
             icon: Icons.person_search_outlined,
             label: '教师姓名',
-            onChanged: (value) => setState(() => _teacherName = value),
+            onChanged: (value) {
+              setState(() => _teacherName = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 10),
           LkcnButton.primary(
@@ -1740,9 +1780,13 @@ class _TimetableBlockActionSheetState
   @override
   void initState() {
     super.initState();
+    final sectionGroup = _timeLookupSectionForSlot(
+      widget.block.startSlot,
+      widget.controller.selectedCalendarId,
+    );
     _replacementFuture = widget.controller.findCoursesAtTimeForReplacement(
       day: widget.block.day,
-      section: widget.block.startSlot,
+      section: sectionGroup ?? widget.block.startSlot,
     );
   }
 
@@ -1878,10 +1922,17 @@ class _ReplacementCourseRowState extends State<_ReplacementCourseRow> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final course = _hydratedCourse ?? widget.course;
+    final lookupSection = _timeLookupSectionForSlot(
+      widget.section,
+      widget.controller.selectedCalendarId,
+    ) ?? widget.section;
+    final sectionSlots = _slotsForSection(lookupSection);
     final matchingClasses = course.classes
         .where(
           (classInfo) => classInfo.arrangements.any(
-            (arrangement) => arrangement.occupies(widget.day, widget.section),
+            (arrangement) =>
+                arrangement.occupyDay == widget.day &&
+                arrangement.occupyTime.any(sectionSlots.contains),
           ),
         )
         .toList(growable: false);
@@ -3156,6 +3207,19 @@ int? _timeLookupSectionForSlot(int slot, int? calendarId) {
     10 || 11 || 12 when !isNewElevenSlotCalendar => 6,
     11 when isNewElevenSlotCalendar => 6,
     _ => null,
+  };
+}
+
+/// Returns the slot numbers covered by the given [section] group (1-6).
+List<int> _slotsForSection(int section) {
+  return switch (section) {
+    1 => [1, 2],
+    2 => [3, 4],
+    3 => [5, 6],
+    4 => [7, 8],
+    5 => [9],
+    6 => [10, 11, 12],
+    _ => [section],
   };
 }
 

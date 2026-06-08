@@ -819,6 +819,8 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     return current.selected.map((s) => s.course.courseCode).toSet();
   }
 
+  int? get selectedCalendarId => state.value?.selectedCalendarId;
+
   /// Remove all scheduled classes for the given [courseCode] from the schedule.
   void unscheduleCourse(String courseCode) {
     final current = state.value;
