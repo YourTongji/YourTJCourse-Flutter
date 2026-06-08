@@ -1967,6 +1967,10 @@ class _ReviewShareImagePainter {
     final leftInset = _markdownLeftInset(block);
     final textWidth = math.max(20.0, maxWidth - leftInset);
     if (block.type == _ShareMarkdownBlockType.divider) return 18;
+    if (block.type == _ShareMarkdownBlockType.table) {
+      final p = _layoutText(_markdownDisplayText(block), _markdownTextStyle(block), maxWidth: maxWidth);
+      return p.height + 12;
+    }
     final painter = _layoutText(
       _markdownDisplayText(block),
       style,
@@ -2077,6 +2081,23 @@ class _ReviewShareImagePainter {
         Paint()..color = const Color(0xFF0F172A),
       );
       painter.paint(canvas, Offset(textOffset.dx + 12, textOffset.dy + 9));
+    } else if (block.type == _ShareMarkdownBlockType.table) {
+      // Table row with subtle background and bottom border.
+      final tableRect = Rect.fromLTWH(
+        offset.dx, offset.dy, maxWidth, painter.height + 10,
+      );
+      canvas.drawRect(
+        tableRect,
+        Paint()..color = const Color(0xFFF8FAFC),
+      );
+      canvas.drawLine(
+        Offset(offset.dx, offset.dy + painter.height + 10),
+        Offset(offset.dx + maxWidth, offset.dy + painter.height + 10),
+        Paint()
+          ..color = const Color(0xFFE2E8F0)
+          ..strokeWidth = 0.5,
+      );
+      painter.paint(canvas, Offset(textOffset.dx + 6, textOffset.dy + 5));
     } else {
       if (block.type == _ShareMarkdownBlockType.bullet) {
         canvas.drawCircle(
@@ -2109,6 +2130,7 @@ class _ReviewShareImagePainter {
       _ShareMarkdownBlockType.paragraph => 10,
       _ShareMarkdownBlockType.divider => 0,
       _ShareMarkdownBlockType.image => 8,
+      _ShareMarkdownBlockType.table => 0,
     };
   }
 
@@ -2278,6 +2300,7 @@ enum _ShareMarkdownBlockType {
   code,
   divider,
   image,
+  table,
 }
 
 class _ShareMarkdownBlock {
@@ -2445,9 +2468,10 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownTableBlocks(md.Element table) {
 
   collectRows(table);
   if (rows.isEmpty) return const [];
-  return rows.map((cells) {
+  return rows.asMap().entries.map((entry) {
+    final cells = entry.value;
     final line = cells.join(' │ ');
-    return _ShareMarkdownBlock(type: _ShareMarkdownBlockType.paragraph, text: line);
+    return _ShareMarkdownBlock(type: _ShareMarkdownBlockType.table, text: line);
   });
 }
 
@@ -2473,10 +2497,8 @@ String _shareMarkdownText(md.Node node) {
     return '$wrap$inner$wrap';
   }
   if (node.tag == 'a') {
-    final href = node.attributes['href'] ?? '';
     final inner = children.map(_shareMarkdownText).join().trim();
-    if (href.isEmpty || inner.isEmpty) return inner;
-    return '[$inner]($href)';
+    return inner;
   }
 
   final buffer = StringBuffer();
