@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/cancel_token_scope.dart';
 import '../../core/storage/client_id_store.dart';
 import '../../domain/models/ai_summary.dart';
+import '../../domain/models/course.dart';
 import '../../domain/models/course_detail.dart';
 import '../../domain/models/report_reason.dart';
 import '../../domain/models/review.dart';
@@ -124,9 +125,37 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
 
   Future<RelatedCourses> _loadRelatedCourses() async {
     try {
-      return await _courseRepository.getRelatedCourses(
+      final related = await _courseRepository.getRelatedCourses(
         id: _courseId,
         cancelToken: _cancelToken,
+      );
+
+      // The related courses API may not include the `credit` field in
+      // each course object. Fetch full details in parallel to enrich
+      // credit data for courses that appear to have 0 credit.
+      Future<Course> enrichCredit(Course course) async {
+        if (course.credit > 0) return course;
+        try {
+          final detail = await _courseRepository.getCourseDetail(
+            id: course.id,
+            cancelToken: _cancelToken,
+          );
+          return course.copyWith(credit: detail.credit);
+        } catch (_) {
+          return course;
+        }
+      }
+
+      final enrichedTeacher = await Future.wait(
+        related.teacherOtherCourses.map(enrichCredit),
+      );
+      final enrichedSame = await Future.wait(
+        related.sameCourseOtherTeachers.map(enrichCredit),
+      );
+
+      return RelatedCourses(
+        teacherOtherCourses: enrichedTeacher,
+        sameCourseOtherTeachers: enrichedSame,
       );
     } catch (error) {
       if (isRequestCancellation(error)) rethrow;

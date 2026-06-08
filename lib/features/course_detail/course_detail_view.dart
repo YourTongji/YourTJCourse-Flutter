@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -154,14 +155,20 @@ class CourseDetailView extends ConsumerWidget {
                       ),
                     ),
                   ),
-                SliverList(
+                  SliverList(
                   delegate: SliverChildListDelegate([
                     for (final course
                         in state.relatedCourses.teacherOtherCourses)
-                      CourseCard(course: course, onTap: () {}),
+                      CourseCard(
+                        course: course,
+                        onTap: () => context.push('/course/${course.id}'),
+                      ),
                     for (final course
                         in state.relatedCourses.sameCourseOtherTeachers)
-                      CourseCard(course: course, onTap: () {}),
+                      CourseCard(
+                        course: course,
+                        onTap: () => context.push('/course/${course.id}'),
+                      ),
                     const SizedBox(height: 24),
                   ]),
                 ),

@@ -40,4 +40,30 @@ class Course {
   final String department;
   final double credit;
   final List<String> semesters;
+
+  Course copyWith({
+    int? id,
+    String? code,
+    String? name,
+    double? rating,
+    int? reviewCount,
+    int? isLegacy,
+    String? teacherName,
+    String? department,
+    double? credit,
+    List<String>? semesters,
+  }) {
+    return Course(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? this.name,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      isLegacy: isLegacy ?? this.isLegacy,
+      teacherName: teacherName ?? this.teacherName,
+      department: department ?? this.department,
+      credit: credit ?? this.credit,
+      semesters: semesters ?? this.semesters,
+    );
+  }
 }
