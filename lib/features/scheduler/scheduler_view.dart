@@ -1782,7 +1782,7 @@ class _TimetableBlockActionSheetState
     super.initState();
     final sectionGroup = _timeLookupSectionForSlot(
       widget.block.startSlot,
-      widget.controller.state.value?.selectedCalendarId,
+      widget.controller.selectedCalendarId,
     );
     _replacementFuture = widget.controller.findCoursesAtTimeForReplacement(
       day: widget.block.day,
@@ -1924,7 +1924,7 @@ class _ReplacementCourseRowState extends State<_ReplacementCourseRow> {
     final course = _hydratedCourse ?? widget.course;
     final lookupSection = _timeLookupSectionForSlot(
       widget.section,
-      widget.controller.state.value?.selectedCalendarId,
+      widget.controller.selectedCalendarId,
     ) ?? widget.section;
     final sectionSlots = _slotsForSection(lookupSection);
     final matchingClasses = course.classes
