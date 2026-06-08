@@ -214,7 +214,7 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
           context,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          alignment: 0.05, // small top padding
+          alignment: 0.0, // align to top of viewport
         );
       }
     });

@@ -184,6 +184,10 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   /// Cache for class review info, keyed by class code.
   final Map<String, SchedulerClassReviewInfo> reviewCache = {};
 
+  /// Backups of major/optional courses before search() clears them.
+  List<SchedulerCourse>? _savedMajorCourses;
+  List<SchedulerCourse>? _savedOptionalCourses;
+
   @override
   Future<SchedulerState> build() async {
     _repository = ref.watch(schedulerRepositoryProvider);
@@ -466,6 +470,9 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;
     if (calendarId == null) return;
+    // Save major/optional backups before clearing — resetSearch() restores them.
+    if (current.majorCourses.isNotEmpty) _savedMajorCourses = current.majorCourses;
+    if (current.optionalCourses.isNotEmpty) _savedOptionalCourses = current.optionalCourses;
     final keyword = [
       courseName,
       courseCode,
@@ -495,7 +502,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     });
   }
 
-  /// Clear search/time results and restore major/optional courses list.
+  /// Clear search/time results and restore major/optional courses from backup.
   void resetSearch() {
     final current = state.value;
     if (current == null) return;
@@ -503,8 +510,12 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
       searchText: '',
       searchCourses: const [],
       timeCourses: const [],
+      majorCourses: _savedMajorCourses ?? current.majorCourses,
+      optionalCourses: _savedOptionalCourses ?? current.optionalCourses,
       clearNotice: true,
     ));
+    _savedMajorCourses = null;
+    _savedOptionalCourses = null;
   }
 
   Future<void> findByTime({required int day, required int section}) async {
