@@ -2026,8 +2026,8 @@ class _ReviewShareImagePainter {
 
   /// Measure actual text height for a cell wrapped at [cellWidth].
   double _cellHeight(String text, double cellWidth) {
-    final p = _layoutText(text, const TextStyle(fontSize: 13), maxWidth: math.max(cellWidth - 8, 4));
-    return p.height + 8; // 4px top + 4px bottom padding
+    final p = _layoutText(text, const TextStyle(fontSize: 13, fontWeight: FontWeight.w700), maxWidth: math.max(cellWidth - 8, 4));
+    return p.height + 8;
   }
 
   /// Compute row heights for a table given column widths.
