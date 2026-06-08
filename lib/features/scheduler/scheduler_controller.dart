@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -169,9 +170,15 @@ class SchedulerTimetableEntry {
 
 class SchedulerController extends AsyncNotifier<SchedulerState> {
   static const _selectedStorageKey = 'de.yourtj.course.scheduler.selected';
+  static const _calendarKey = 'de.yourtj.course.scheduler.calendarId';
+  static const _gradeKey = 'de.yourtj.course.scheduler.grade';
+  static const _majorKey = 'de.yourtj.course.scheduler.majorCode';
 
   late SchedulerRepository _repository;
   late CancelToken _cancelToken;
+
+  /// Cache for class review info, keyed by class code.
+  final Map<String, SchedulerClassReviewInfo> reviewCache = {};
 
   @override
   Future<SchedulerState> build() async {
@@ -189,25 +196,72 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         return const SchedulerState();
       }
       final calendarId = calendars.first.calendarId;
+
+      // Restore persisted selections.
+      final preferences = await SharedPreferences.getInstance();
+      final savedCalendarId = preferences.getInt(_calendarKey);
+      final savedGrade = preferences.getInt(_gradeKey);
+      final savedMajorCode = preferences.getString(_majorKey);
+      final hasSaved = savedCalendarId != null &&
+          savedGrade != null &&
+          savedMajorCode != null &&
+          savedMajorCode.isNotEmpty;
+
+      final targetCalendarId =
+          (hasSaved && calendars.any((c) => c.calendarId == savedCalendarId))
+              ? savedCalendarId
+              : calendarId;
+
       final results = await Future.wait([
         _repository.findGradeByCalendarId(
-          calendarId,
+          targetCalendarId,
           cancelToken: _cancelToken,
         ),
         _repository.findOptionalCourseType(
-          calendarId,
+          targetCalendarId,
           cancelToken: _cancelToken,
         ),
       ]);
       final grades = results[0] as List<int>;
-      final selected = await _restoreSelectedClasses(calendarId);
-      return SchedulerState(
+      final selected = await _restoreSelectedClasses(targetCalendarId);
+
+      var state = SchedulerState(
         calendars: calendars,
-        selectedCalendarId: calendarId,
+        selectedCalendarId: targetCalendarId,
         grades: grades,
         optionalTypes: results[1] as List<OptionalCourseType>,
         selected: selected,
       );
+
+      // Auto-load major courses when returning user has saved selections.
+      if (hasSaved && grades.contains(savedGrade)) {
+        final code = savedMajorCode;
+        final majors = await _repository.findMajorByGrade(
+          calendarId: targetCalendarId,
+          grade: savedGrade,
+          cancelToken: _cancelToken,
+        );
+        final matchedMajor = majors.where((m) => m.code == code).firstOrNull;
+        if (matchedMajor != null) {
+          state = state.copyWith(
+            selectedGrade: savedGrade,
+            selectedMajorCode: code,
+            majors: majors,
+          );
+          final courses = await _repository.findCourseByMajor(
+            calendarId: targetCalendarId,
+            grade: savedGrade,
+            code: code,
+            cancelToken: _cancelToken,
+          );
+          state = state.copyWith(
+            majorCourses: courses,
+            isMajorCoursesLoading: false,
+          );
+        }
+      }
+
+      return state;
     } catch (error) {
       if (isRequestCancellation(error)) {
         return state.value ?? const SchedulerState();
@@ -220,6 +274,8 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
 
   Future<void> selectCalendar(int calendarId) async {
     final current = state.value ?? const SchedulerState();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_calendarKey, calendarId);
     state = AsyncData(
       current.copyWith(
         selectedCalendarId: calendarId,
@@ -267,6 +323,9 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     final current = state.value ?? const SchedulerState();
     final calendarId = current.selectedCalendarId;
     if (calendarId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_gradeKey, grade);
+    await prefs.remove(_majorKey);
     state = AsyncData(
       current.copyWith(
         selectedGrade: grade,
@@ -301,6 +360,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
 
   void selectMajor(String code) {
     final current = state.value ?? const SchedulerState();
+    unawaited(_persistMajorSelection(code));
     state = AsyncData(
       current.copyWith(
         selectedMajorCode: code,
@@ -489,13 +549,40 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<SchedulerClassReviewInfo> loadClassReviewInfo(
     SchedulerCourse course,
     SchedulerClass classInfo,
-  ) {
+  ) async {
+    final cached = reviewCache[classInfo.code];
+    if (cached != null) return cached;
+
     final teacher = classInfo.teachers.firstOrNull;
-    return _repository.getClassReviewInfo(
+    final info = await _repository.getClassReviewInfo(
       courseCode: course.courseCode,
       teacherCode: teacher?.teacherCode,
       teacherName: teacher?.teacherName,
       cancelToken: _cancelToken,
+    );
+    reviewCache[classInfo.code] = info;
+    return info;
+  }
+
+  /// Pre-load review info for all classes of [course] into the cache.
+  Future<void> preloadCourseReviews(SchedulerCourse course) async {
+    await Future.wait(
+      course.classes.map((classInfo) async {
+        if (!reviewCache.containsKey(classInfo.code)) {
+          try {
+            final teacher = classInfo.teachers.firstOrNull;
+            final info = await _repository.getClassReviewInfo(
+              courseCode: course.courseCode,
+              teacherCode: teacher?.teacherCode,
+              teacherName: teacher?.teacherName,
+              cancelToken: _cancelToken,
+            );
+            reviewCache[classInfo.code] = info;
+          } catch (_) {
+            // Silently skip failed loads.
+          }
+        }
+      }),
     );
   }
 
@@ -698,6 +785,11 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
           arrangement.occupyDay <= 7 &&
           arrangement.occupyTime.isNotEmpty,
     );
+  }
+
+  Future<void> _persistMajorSelection(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_majorKey, code);
   }
 
   Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {

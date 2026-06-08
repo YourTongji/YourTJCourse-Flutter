@@ -495,7 +495,7 @@ class _SchedulerHero extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Image.asset('assets/images/app_logo.png', width: 46, height: 46),
+            ClipOval(child: Image.asset('assets/images/app_logo.png', width: 46, height: 46)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -2271,7 +2271,7 @@ class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
   final _selectedCampuses = <String>{};
   var _ratingFilter = 0; // 0=all, 1>=4.0, 2>=3.0, 3<3.0
   final _selectedDays = <int>{};
-  final _reviewCache = <String, SchedulerClassReviewInfo>{};
+  var _isPreloading = true;
 
   late final List<String> _campusOptions;
   late final List<_DayOption> _dayOptions;
@@ -2296,25 +2296,15 @@ class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
     _dayOptions = daySet.map((d) => _DayOption(d)).toList(growable: false)
       ..sort((a, b) => a.day.compareTo(b.day));
 
-    // Pre-load review info for rating-filtered views.
+    // Pre-load review info into the controller's shared cache.
+    // Rating filter becomes usable only after this completes.
     _preloadReviews();
   }
 
   Future<void> _preloadReviews() async {
-    for (final classInfo in widget.course.classes) {
-      final code = classInfo.code;
-      if (_reviewCache.containsKey(code)) continue;
-      try {
-        final info = await widget.controller.loadClassReviewInfo(
-          widget.course,
-          classInfo,
-        );
-        if (!mounted) return;
-        setState(() => _reviewCache[code] = info);
-      } catch (_) {
-        // Silently skip failed review loads.
-      }
-    }
+    await widget.controller.preloadCourseReviews(widget.course);
+    if (!mounted) return;
+    setState(() => _isPreloading = false);
   }
 
   List<SchedulerClass> get _filteredClasses {
@@ -2325,9 +2315,9 @@ class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
         return false;
       }
 
-      // Rating filter
+      // Rating filter — uses controller's shared cache.
       if (_ratingFilter > 0) {
-        final review = _reviewCache[classInfo.code];
+        final review = widget.controller.reviewCache[classInfo.code];
         if (review == null || review.reviewCount <= 0) return false;
         final rating = review.rating;
         if (_ratingFilter == 1 && rating < 4.0) return false;
@@ -2382,7 +2372,13 @@ class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
                   ),
                 ),
               ),
-              if (_hasActiveFilters)
+              if (_isPreloading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              if (!_isPreloading && _hasActiveFilters)
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: scheme.primary,
@@ -2427,11 +2423,22 @@ class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                   ),
                 ),
-                onSelectionChanged: (value) =>
-                    setState(() => _ratingFilter = value.single),
+                onSelectionChanged: _isPreloading
+                    ? null
+                    : (value) => setState(() => _ratingFilter = value.single),
               ),
             ),
           ),
+          if (_isPreloading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                '正在加载评课数据，稍后可启用评分筛选…',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
 
           // -- Campus filter: horizontal chips --

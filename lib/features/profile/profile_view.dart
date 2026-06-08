@@ -79,7 +79,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Image.asset('assets/images/app_logo.png', width: 52),
+                        ClipOval(child: Image.asset('assets/images/app_logo.png', width: 52)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(

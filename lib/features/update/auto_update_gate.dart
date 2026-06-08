@@ -47,7 +47,7 @@ class _AutoUpdateGateState extends ConsumerState<AutoUpdateGate> {
       builder: (ctx) {
         final theme = Theme.of(context);
         return AlertDialog(
-          icon: Image.asset('assets/images/app_logo.png', height: 52),
+          icon: ClipOval(child: Image.asset('assets/images/app_logo.png', height: 52)),
           title: const Text('发现新版本', textAlign: TextAlign.center),
           content: Text(
             '新版本 ${update.tagName} 已发布，是否下载更新？',
