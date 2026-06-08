@@ -2023,7 +2023,7 @@ class _ReviewShareImagePainter {
     if (total > maxWidth) {
       final scale = (maxWidth - (colCount - 1) * _tableBorderWidth) /
           (total - (colCount - 1) * _tableBorderWidth);
-      for (var c = 0; c < colCount; c++) widths[c] *= scale;
+      for (var c = 0; c < colCount; c++) { widths[c] *= scale; }
     }
     return widths;
   }
