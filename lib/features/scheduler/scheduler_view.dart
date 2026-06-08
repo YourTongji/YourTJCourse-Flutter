@@ -2097,42 +2097,56 @@ class _CourseResultRow extends StatefulWidget {
   State<_CourseResultRow> createState() => _CourseResultRowState();
 }
 
-class _CourseResultRowState extends State<_CourseResultRow> {
-  var _loadingClasses = false;
+	class _CourseResultRowState extends State<_CourseResultRow> {
+	  var _loadingClasses = false;
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final course = widget.course;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _openClasses(context),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        course.courseName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-                  ],
-                ),
+	  /// Whether any teaching class of this course is already in the schedule.
+	  bool get _isScheduled {
+	    final selected = widget.controller.state.value?.selected ?? const [];
+	    return selected.any((s) => s.course.courseCode == widget.course.courseCode);
+	  }
+
+	  @override
+	  Widget build(BuildContext context) {
+	    final theme = Theme.of(context);
+	    final scheme = theme.colorScheme;
+	    final course = widget.course;
+	    final scheduled = _isScheduled;
+	    return Padding(
+	      padding: const EdgeInsets.only(bottom: 8),
+	      child: Material(
+	        color: scheduled
+	            ? scheme.primaryContainer.withValues(alpha: 0.18)
+	            : scheme.surface,
+	        borderRadius: BorderRadius.circular(14),
+	        child: InkWell(
+	          borderRadius: BorderRadius.circular(14),
+	          onTap: () => _openClasses(context),
+	          child: Padding(
+	            padding: const EdgeInsets.all(12),
+	            child: Column(
+	              crossAxisAlignment: CrossAxisAlignment.start,
+	              children: [
+	                Row(
+	                  children: [
+	                    Expanded(
+	                      child: Text(
+	                        course.courseName,
+	                        maxLines: 2,
+	                        overflow: TextOverflow.ellipsis,
+	                        style: theme.textTheme.titleSmall?.copyWith(
+	                          fontWeight: FontWeight.w800,
+	                        ),
+	                      ),
+	                    ),
+	                    if (scheduled)
+	                      Padding(
+	                        padding: const EdgeInsets.only(right: 4),
+	                        child: LkcnTag(text: '已排', type: LkcnTagType.light, color: LkcnTagColor.green),
+	                      ),
+	                    Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+	                  ],
+	                ),
                 const SizedBox(height: 7),
                 Wrap(
                   spacing: 6,
