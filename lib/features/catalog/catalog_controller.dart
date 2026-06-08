@@ -199,7 +199,7 @@ class CatalogController extends AsyncNotifier<CatalogState> {
   }
 
   void setSearchText(String text) {
-    const maxLength = 50;
+    const maxLength = 16;
     if (text.length > maxLength) {
       text = text.substring(0, maxLength);
     }

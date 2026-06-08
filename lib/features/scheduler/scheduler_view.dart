@@ -2116,22 +2116,22 @@ class _CourseResultRowState extends State<_CourseResultRow> {
     final scheme = theme.colorScheme;
     final course = widget.course;
     final scheduled = _isScheduled;
-    return Stack(
-      children: [
-        if (scheduled)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _DashedBorderPainter(
-                  color: scheme.primary.withValues(alpha: 0.55),
-                  radius: 14,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Stack(
+        children: [
+          if (scheduled)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _DashedBorderPainter(
+                    color: scheme.primary.withValues(alpha: 0.55),
+                    radius: 14,
+                  ),
                 ),
               ),
             ),
-          ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Material(
+          Material(
             color: scheduled
                 ? scheme.primary.withValues(alpha: 0.13)
                 : scheme.surface,
@@ -2257,8 +2257,8 @@ class _CourseResultRowState extends State<_CourseResultRow> {
           ),
         ),
       ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

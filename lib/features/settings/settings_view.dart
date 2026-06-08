@@ -208,12 +208,12 @@ class SettingsView extends ConsumerWidget {
       _SheetParagraph('联系方式', '您可以通过以下渠道与我们交流。'),
       _SheetLink(
         'QQ 群',
-        'https://qm.qq.com/cgi-bin/qm/qr?k=0iG2FDb2_4xBwz4Dyk2bSLWLYLR47a5c&jump_from=webapi&authKey=H3w7wP50fXH/vc+BTf6eJR6OK+Rnc2SlAlECEO1aU/3wEBGt4RJvI3DNMqXpFV7D',
+        'https://qm.qq.com/q/cOGO5CEkdG',
         brandIcon: FontAwesomeIcons.qq,
       ),
       _SheetLink(
         'Telegram 频道',
-        'https://t.me/yourtj_course',
+        'https://t.me/yourtongji',
         brandIcon: FontAwesomeIcons.telegram,
       ),
       const _SheetLink('support@yourtj.de', 'mailto:support@yourtj.de'),
@@ -306,6 +306,25 @@ class SettingsView extends ConsumerWidget {
         const Text('YourTJ选课社区安卓客户端'),
         const SizedBox(height: 12),
         _ReleaseUpdateChecker(openLink: _openLink),
+        const SizedBox(height: 8),
+        const Text('交流渠道', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AboutLink(
+              label: 'QQ 群',
+              url: 'https://qm.qq.com/q/cOGO5CEkdG',
+              icon: FontAwesomeIcons.qq,
+            ),
+            const SizedBox(width: 24),
+            _AboutLink(
+              label: 'Telegram 频道',
+              url: 'https://t.me/yourtongji',
+              icon: FontAwesomeIcons.telegram,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -319,6 +338,45 @@ enum _ReleaseChannel {
 
   final String label;
   final String tag;
+}
+
+class _AboutLink extends StatelessWidget {
+  const _AboutLink({required this.label, required this.url, required this.icon});
+
+  final String label;
+  final String url;
+  final FaIconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => launchUrl(Uri.parse(url),
+            mode: LaunchMode.externalApplication),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(icon, size: 16, color: scheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ReleaseUpdateChecker extends StatefulWidget {

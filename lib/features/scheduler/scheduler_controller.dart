@@ -656,6 +656,18 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
   Future<void> saveSelectedClasses() async {
     final current = state.value ?? const SchedulerState();
     await _persistSelectedClasses(current.selected);
+    // Also persist the current grade/major selection.
+    final prefs = await SharedPreferences.getInstance();
+    if (current.selectedGrade != null) {
+      await prefs.setInt(_gradeKey, current.selectedGrade!);
+    }
+    if (current.selectedMajorCode != null &&
+        current.selectedMajorCode!.isNotEmpty) {
+      await prefs.setString(_majorKey, current.selectedMajorCode!);
+    }
+    if (current.selectedCalendarId != null) {
+      await prefs.setInt(_calendarKey, current.selectedCalendarId!);
+    }
     state = AsyncData(current.copyWith(notice: '已保存模拟课表'));
   }
 
