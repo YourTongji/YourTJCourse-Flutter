@@ -1,0 +1,142 @@
+name: Release
+
+# Publishes a GitHub Release for a version, with categorized summary plus the
+# full commit changelog since the previous version. APKs are built and uploaded.
+#
+# Two ways to trigger:
+#   1. Push a tag:        scripts/release.sh   (creates + pushes v<version>)
+#   2. Manual dispatch:   Actions → Release → Run workflow (reads pubspec.yaml)
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without leading v (blank = read pubspec.yaml)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: "17"
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version and tag
+        id: ver
+        run: |
+          set -euo pipefail
+          chmod +x scripts/*.sh
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+            if [[ -z "$VERSION" ]]; then
+              VERSION="$(scripts/pubspec-version.sh)"
+            fi
+            TAG="v${VERSION}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG (version $VERSION)"
+
+      - name: Verify pubspec.yaml matches the release version
+        run: |
+          set -euo pipefail
+          PKG_VERSION="$(scripts/pubspec-version.sh)"
+          if [[ "$PKG_VERSION" != "${{ steps.ver.outputs.version }}" ]]; then
+            echo "::error::pubspec.yaml version ($PKG_VERSION) != release version (${{ steps.ver.outputs.version }}). Bump pubspec.yaml before releasing."
+            exit 1
+          fi
+
+      - name: Ensure the commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::This commit is not on origin/main. Releases must be cut from main."
+            exit 1
+          fi
+
+      - name: Create tag (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — reusing it."
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          scripts/release-notes.sh "${{ steps.ver.outputs.version }}" "${{ steps.ver.outputs.tag }}" > RELEASE_NOTES.md
+          echo "----- generated notes -----"
+          cat RELEASE_NOTES.md
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create env file
+        run: |
+          cat > .env <<'EOF'
+          API_BASE_URL=${{ secrets.API_BASE_URL || 'https://jcourse.yourtj.de' }}
+          CREDIT_API_BASE_URL=${{ secrets.CREDIT_API_BASE_URL || 'https://core.credit.yourtj.de' }}
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APKs
+        run: flutter build apk --release --split-per-abi --dart-define=APP_BUILD_SHA=$GITHUB_SHA
+
+      - name: Publish / update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          TITLE="YourTJ Course ${TAG}"
+          APKS=(build/app/outputs/flutter-apk/app-*-release.apk)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file RELEASE_NOTES.md
+            gh release upload "$TAG" "${APKS[@]}" --clobber
+          else
+            gh release create "$TAG" "${APKS[@]}" \
+              --title "$TITLE" \
+              --notes-file RELEASE_NOTES.md \
+              --verify-tag
+          fi
+
+      - name: Add notes to job summary
+        run: cat RELEASE_NOTES.md >> "$GITHUB_STEP_SUMMARY"
