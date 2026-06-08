@@ -1942,7 +1942,7 @@ class _ReviewShareImagePainter {
       if (blocks[i].type == _ShareMarkdownBlockType.table) {
         final tableEnd = _findTableEnd(blocks, i);
         final grouped = blocks.sublist(i, tableEnd);
-        height += _measureTableGroup(grouped);
+        height += _measureTableGroup(grouped, maxWidth);
         i = tableEnd;
       } else {
         height += _markdownBlockHeight(blocks[i], maxWidth);
@@ -2044,11 +2044,11 @@ class _ReviewShareImagePainter {
   }
 
   /// Compute the height of a grouped table with variable row heights.
-  double _measureTableGroup(List<_ShareMarkdownBlock> rows) {
+  double _measureTableGroup(List<_ShareMarkdownBlock> rows, double maxWidth) {
     final cellList = rows.map((r) => _parseRowCells(r.text)).toList();
     if (cellList.isEmpty || cellList.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
     final colCount = cellList.map((c) => c.length).reduce(math.max);
-    final colWidths = _computeColWidths(cellList, colCount, 540.0);
+    final colWidths = _computeColWidths(cellList, colCount, maxWidth);
     final rowHs = _computeRowHeights(cellList, colWidths, colCount);
     return rowHs.fold(0.0, (a, b) => a + b) + 2;
   }
