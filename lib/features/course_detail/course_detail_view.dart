@@ -1975,10 +1975,10 @@ class _ReviewShareImagePainter {
     return painter.height + _markdownBottomSpacing(block);
   }
 
-  double _imageHeight = 160.0;
-  Color _imagePlaceholderColor = Color(0xFFE2E8F0);
-  Color _imagePlaceholderTextColor = Color(0xFF94A3B8);
-  double _singleLineHeight = 24.0;
+  static const double _imageHeight = 160.0;
+  static const Color _imagePlaceholderColor = Color(0xFFE2E8F0);
+  static const Color _imagePlaceholderTextColor = Color(0xFF94A3B8);
+  static const double _singleLineHeight = 24.0;
 
   double _paintMarkdownBlock(
     Canvas canvas,
