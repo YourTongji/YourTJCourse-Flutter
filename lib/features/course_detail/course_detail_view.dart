@@ -1992,7 +1992,7 @@ class _ReviewShareImagePainter {
   /// Compute the height of a grouped table.
   double _measureTableGroup(List<_ShareMarkdownBlock> rows) {
     final cells = rows.map((r) => _parseRowCells(r.text)).toList();
-    if (cells.isEmpty || cells.every((c) => c.isEmpty)) return 0;
+    if (cells.isEmpty || cells.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
     return rows.length * 28.0 + 2;
   }
 
@@ -2011,7 +2011,7 @@ class _ReviewShareImagePainter {
       for (var c = 0; c < row.length && c < colCount; c++) {
         final p = _layoutText(
           row[c],
-          const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           maxWidth: maxWidth,
         );
         widths[c] = math.max(widths[c], p.width + 12);
@@ -2020,10 +2020,13 @@ class _ReviewShareImagePainter {
     // Clamp total width to maxWidth.
     final total = widths.fold(0.0, (a, b) => a + b) +
         (colCount - 1) * _tableBorderWidth;
-    if (total > maxWidth) {
-      final scale = (maxWidth - (colCount - 1) * _tableBorderWidth) /
-          (total - (colCount - 1) * _tableBorderWidth);
-      for (var c = 0; c < colCount; c++) { widths[c] *= scale; }
+    if (total > maxWidth && total > (colCount - 1) * _tableBorderWidth) {
+      final contentWidth = total - (colCount - 1) * _tableBorderWidth;
+      final availableWidth = maxWidth - (colCount - 1) * _tableBorderWidth;
+      if (contentWidth > 0 && availableWidth > 0) {
+        final scale = availableWidth / contentWidth;
+        for (var c = 0; c < colCount; c++) { widths[c] *= scale; }
+      }
     }
     return widths;
   }
@@ -2037,6 +2040,7 @@ class _ReviewShareImagePainter {
   ) {
     if (rows.isEmpty) return 0;
     final cells = rows.map((r) => _parseRowCells(r.text)).toList();
+    if (cells.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
     final colCount = cells.map((c) => c.length).reduce(math.max);
     final colWidths = _computeColWidths(cells, colCount, maxWidth);
     final rowHeight = 28.0;
