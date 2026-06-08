@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/models/runtime_state.dart';
 import '../../domain/repositories/settings_repository.dart';
+
+const _announcementPollInterval = Duration(minutes: 5);
 
 final announcementControllerProvider =
     AsyncNotifierProvider.autoDispose<AnnouncementController, Announcement?>(
@@ -11,9 +15,24 @@ final announcementControllerProvider =
 
 class AnnouncementController extends AsyncNotifier<Announcement?> {
   static const _lastReadKey = 'de.yourtj.course.lastReadAnnouncementId';
+  Timer? _pollTimer;
 
   @override
   Future<Announcement?> build() async {
+    final result = await _fetchLatest();
+    _startPolling();
+    ref.onDispose(() => _pollTimer?.cancel());
+    return result;
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_announcementPollInterval, (_) {
+      ref.invalidateSelf();
+    });
+  }
+
+  Future<Announcement?> _fetchLatest() async {
     final runtimeState = await ref
         .watch(settingsRepositoryProvider)
         .getRuntimeState();

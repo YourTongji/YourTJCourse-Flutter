@@ -6,9 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yourtjcourse_flutter/core/network/api_client.dart';
+import 'package:yourtjcourse_flutter/domain/models/course.dart';
 import 'package:yourtjcourse_flutter/domain/models/course_detail.dart';
+import 'package:yourtjcourse_flutter/domain/models/paginated_response.dart';
 import 'package:yourtjcourse_flutter/domain/models/review.dart';
+import 'package:yourtjcourse_flutter/domain/repositories/course_repository.dart';
+import 'package:yourtjcourse_flutter/domain/repositories/settings_repository.dart';
 import 'package:yourtjcourse_flutter/features/announcements/announcement_controller.dart';
+import 'package:yourtjcourse_flutter/features/catalog/catalog_view.dart';
 import 'package:yourtjcourse_flutter/features/course_detail/course_detail_view.dart';
 import 'package:yourtjcourse_flutter/main.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
@@ -37,6 +42,34 @@ void main() {
     expect(find.text('排课'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('更多'), findsOneWidget);
+  });
+
+  testWidgets('keeps catalog search text after debounced refresh', (
+    tester,
+  ) async {
+    final repository = _CatalogSearchRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          courseRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            _CatalogSettingsRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: CatalogView()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.enterText(find.byType(SearchBar), '高等数学');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.controller.text, '高等数学');
+    expect(repository.queries, contains('高等数学'));
   });
 
   testWidgets('renders selected scheduler class as visible timetable pixels', (
@@ -207,6 +240,59 @@ void main() {
 class _NoAnnouncementController extends AnnouncementController {
   @override
   Future<Never?> build() async => null;
+}
+
+class _CatalogSearchRepository extends CourseRepository {
+  _CatalogSearchRepository() : super(ApiClient(Dio()));
+
+  final queries = <String?>[];
+
+  @override
+  Future<PaginatedResponse<Course>> getCourses({
+    String? query,
+    List<String>? departments,
+    bool onlyWithReviews = false,
+    String? courseName,
+    String? courseCode,
+    String? teacherName,
+    String? teacherCode,
+    String? campus,
+    String? faculty,
+    int page = 1,
+    int limit = 20,
+    bool includeTotal = false,
+    CancelToken? cancelToken,
+  }) async {
+    queries.add(query);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    return PaginatedResponse(
+      data: [
+        Course(
+          id: 1,
+          code: 'MATH001',
+          name: query?.isEmpty ?? true ? '线性代数' : query!,
+          rating: 4.7,
+          reviewCount: 12,
+          isLegacy: 0,
+          teacherName: '张老师',
+          department: '数学科学学院',
+          credit: 5,
+          semesters: const ['2025-2026-1'],
+        ),
+      ],
+      hasMore: false,
+      total: 1,
+    );
+  }
+}
+
+class _CatalogSettingsRepository extends SettingsRepository {
+  _CatalogSettingsRepository() : super(ApiClient(Dio()));
+
+  @override
+  Future<List<String>> getDepartments({CancelToken? cancelToken}) async {
+    return const ['数学科学学院'];
+  }
 }
 
 const _visibleCourse = SchedulerCourse(

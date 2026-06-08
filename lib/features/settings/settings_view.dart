@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -24,7 +25,7 @@ class SettingsView extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                Image.asset('assets/images/app_logo.png', width: 56),
+                ClipOval(child: Image.asset('assets/images/app_logo.png', width: 56)),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Column(
@@ -204,7 +205,17 @@ class SettingsView extends ConsumerWidget {
       _SheetParagraph('简介', _aboutIntro),
       _SheetParagraph('匿名身份', _aboutAnonymous),
       _SheetParagraph('点评管理', _aboutModeration),
-      const _SheetParagraph('联系方式', '您目前可以通过邮件联系我们。'),
+      _SheetParagraph('联系方式', '您可以通过以下渠道与我们交流。'),
+      _SheetLink(
+        'QQ 群',
+        'https://qm.qq.com/q/cOGO5CEkdG',
+        brandIcon: FontAwesomeIcons.qq,
+      ),
+      _SheetLink(
+        'Telegram 频道',
+        'https://t.me/yourtongji',
+        brandIcon: FontAwesomeIcons.telegram,
+      ),
       const _SheetLink('support@yourtj.de', 'mailto:support@yourtj.de'),
       _SheetParagraph('致谢', 'YOURTJ选课社区基于 SJTU选课社区 源代码。'),
       _SheetLink(
@@ -290,11 +301,30 @@ class SettingsView extends ConsumerWidget {
       context: context,
       applicationName: 'YourTJ Course',
       applicationVersion: '0.0.1',
-      applicationIcon: Image.asset('assets/images/app_logo.png', width: 56),
+      applicationIcon: ClipOval(child: Image.asset('assets/images/app_logo.png', width: 56)),
       children: [
         const Text('YourTJ选课社区安卓客户端'),
         const SizedBox(height: 12),
         _ReleaseUpdateChecker(openLink: _openLink),
+        const SizedBox(height: 8),
+        const Text('交流渠道', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AboutLink(
+              label: 'QQ 群',
+              url: 'https://qm.qq.com/q/cOGO5CEkdG',
+              icon: FontAwesomeIcons.qq,
+            ),
+            const SizedBox(width: 24),
+            _AboutLink(
+              label: 'Telegram 频道',
+              url: 'https://t.me/yourtongji',
+              icon: FontAwesomeIcons.telegram,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -308,6 +338,45 @@ enum _ReleaseChannel {
 
   final String label;
   final String tag;
+}
+
+class _AboutLink extends StatelessWidget {
+  const _AboutLink({required this.label, required this.url, required this.icon});
+
+  final String label;
+  final String url;
+  final FaIconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => launchUrl(Uri.parse(url),
+            mode: LaunchMode.externalApplication),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(icon, size: 16, color: scheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ReleaseUpdateChecker extends StatefulWidget {
@@ -696,23 +765,27 @@ class _SheetParagraph implements _SheetContent {
 }
 
 class _SheetLink implements _SheetContent {
-  const _SheetLink(this.label, this.url);
+  const _SheetLink(this.label, this.url, {this.brandIcon});
 
   final String label;
   final String url;
+  final FaIconData? brandIcon;
 
   @override
   Widget build(
     BuildContext context,
     Future<void> Function(BuildContext, String) openLink,
   ) {
+    final iconWidget = brandIcon != null
+        ? FaIcon(brandIcon, size: 16)
+        : const Icon(Icons.open_in_new, size: 16);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
           onPressed: () => openLink(context, url),
-          icon: const Icon(Icons.open_in_new, size: 16),
+          icon: iconWidget,
           label: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
         ),
       ),

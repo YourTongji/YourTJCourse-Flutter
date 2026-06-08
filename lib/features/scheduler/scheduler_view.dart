@@ -78,6 +78,14 @@ class _SchedulerBody extends StatefulWidget {
 class _SchedulerBodyState extends State<_SchedulerBody> {
   var _activeSection = 0;
   var _sidebarCollapsed = false;
+  final _bodyScrollController = ScrollController();
+  final _resultsKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _bodyScrollController.dispose();
+    super.dispose();
+  }
 
   static const _sections = [
     LkcnCategoryItem(text: '筛选', icon: Icons.tune_outlined),
@@ -107,9 +115,14 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
           ),
           Expanded(
             child: ListView(
+              controller: _bodyScrollController,
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
               children: [
                 _SchedulerHero(state: state),
+                if (state.courseChanges.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _CourseChangeBanner(changes: state.courseChanges),
+                ],
                 if (state.notice != null) ...[
                   const SizedBox(height: 10),
                   _NoticeStrip(text: state.notice!),
@@ -148,6 +161,7 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
         _OptionalCandidatesSection(state: state, controller: controller),
         const SizedBox(height: 12),
         _ResultsSection(
+          key: _resultsKey,
           title: _resultTitle(state),
           state: state,
           controller: controller,
@@ -191,6 +205,19 @@ class _SchedulerBodyState extends State<_SchedulerBody> {
     await widget.controller.findByTime(day: day, section: lookupSection);
     if (!mounted) return;
     setState(() => _activeSection = 1);
+    // Scroll to the results section card.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final context = _resultsKey.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.0, // align to top of viewport
+        );
+      }
+    });
   }
 }
 
@@ -495,7 +522,7 @@ class _SchedulerHero extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Image.asset('assets/images/app_logo.png', width: 46, height: 46),
+            ClipOval(child: Image.asset('assets/images/app_logo.png', width: 46, height: 46)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -545,6 +572,16 @@ class _SearchSectionState extends State<_SearchSection> {
   String _courseCode = '';
   String _teacherName = '';
 
+  void _onFieldChanged() {
+    final hasAny = _courseName.trim().isNotEmpty ||
+        _courseCode.trim().isNotEmpty ||
+        _teacherName.trim().isNotEmpty;
+    if (!hasAny) {
+      // All fields cleared — restore major/optional course lists.
+      widget.controller.resetSearch();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
@@ -556,20 +593,29 @@ class _SearchSectionState extends State<_SearchSection> {
           _InputRow(
             icon: Icons.menu_book_outlined,
             label: '课程名',
-            onChanged: (value) => setState(() => _courseName = value),
+            onChanged: (value) {
+              setState(() => _courseName = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 8),
           _InputRow(
             icon: Icons.confirmation_number_outlined,
             label: '课号',
             textCapitalization: TextCapitalization.characters,
-            onChanged: (value) => setState(() => _courseCode = value),
+            onChanged: (value) {
+              setState(() => _courseCode = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 8),
           _InputRow(
             icon: Icons.person_search_outlined,
             label: '教师姓名',
-            onChanged: (value) => setState(() => _teacherName = value),
+            onChanged: (value) {
+              setState(() => _teacherName = value);
+              _onFieldChanged();
+            },
           ),
           const SizedBox(height: 10),
           LkcnButton.primary(
@@ -878,7 +924,7 @@ class _TimetableSection extends StatelessWidget {
 }
 
 class _ResultsSection extends StatelessWidget {
-  const _ResultsSection({
+  const _ResultsSection({super.key,
     required this.title,
     required this.state,
     required this.controller,
@@ -1736,9 +1782,13 @@ class _TimetableBlockActionSheetState
   @override
   void initState() {
     super.initState();
+    final sectionGroup = _timeLookupSectionForSlot(
+      widget.block.startSlot,
+      widget.controller.selectedCalendarId,
+    );
     _replacementFuture = widget.controller.findCoursesAtTimeForReplacement(
       day: widget.block.day,
-      section: widget.block.startSlot,
+      section: sectionGroup ?? widget.block.startSlot,
     );
   }
 
@@ -1874,10 +1924,17 @@ class _ReplacementCourseRowState extends State<_ReplacementCourseRow> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final course = _hydratedCourse ?? widget.course;
+    final lookupSection = _timeLookupSectionForSlot(
+      widget.section,
+      widget.controller.selectedCalendarId,
+    ) ?? widget.section;
+    final sectionSlots = _slotsForSection(lookupSection);
     final matchingClasses = course.classes
         .where(
           (classInfo) => classInfo.arrangements.any(
-            (arrangement) => arrangement.occupies(widget.day, widget.section),
+            (arrangement) =>
+                arrangement.occupyDay == widget.day &&
+                arrangement.occupyTime.any(sectionSlots.contains),
           ),
         )
         .toList(growable: false);
@@ -2100,17 +2157,39 @@ class _CourseResultRow extends StatefulWidget {
 class _CourseResultRowState extends State<_CourseResultRow> {
   var _loadingClasses = false;
 
+  /// Whether any teaching class of this course is already in the schedule.
+  bool get _isScheduled {
+    final scheduledCodes = widget.controller.scheduledCourseCodes();
+    return scheduledCodes.contains(widget.course.courseCode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final course = widget.course;
+    final scheduled = _isScheduled;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
+      child: Stack(
+        children: [
+          if (scheduled)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _DashedBorderPainter(
+                    color: scheme.primary.withValues(alpha: 0.55),
+                    radius: 14,
+                  ),
+                ),
+              ),
+            ),
+          Material(
+            color: scheduled
+                ? scheme.primary.withValues(alpha: 0.13)
+                : scheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () => _openClasses(context),
           child: Padding(
@@ -2130,6 +2209,20 @@ class _CourseResultRowState extends State<_CourseResultRow> {
                         ),
                       ),
                     ),
+                    if (scheduled)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: GestureDetector(
+                          onTap: () => widget.controller.unscheduleCourse(
+                            course.courseCode,
+                          ),
+                          child: LkcnTag(
+                            text: '已排 ✕',
+                            type: LkcnTagType.light,
+                            color: LkcnTagColor.green,
+                          ),
+                        ),
+                      ),
                     Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
                   ],
                 ),
@@ -2217,6 +2310,8 @@ class _CourseResultRowState extends State<_CourseResultRow> {
           ),
         ),
       ),
+        ],
+      ),
     );
   }
 
@@ -2245,33 +2340,306 @@ class _CourseResultRowState extends State<_CourseResultRow> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.76,
-        minChildSize: 0.4,
-        maxChildSize: 0.94,
-        builder: (context, scrollController) => ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          children: [
-            Text(
-              course.courseName,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            for (final classInfo in course.classes)
-              _ClassDetail(
-                course: course,
-                classInfo: classInfo,
-                controller: widget.controller,
-              ),
-          ],
-        ),
+      builder: (context) => _ClassSelectionSheet(
+        course: course,
+        controller: widget.controller,
       ),
     );
   }
+}
+
+class _ClassSelectionSheet extends StatefulWidget {
+  const _ClassSelectionSheet({
+    required this.course,
+    required this.controller,
+  });
+
+  final SchedulerCourse course;
+  final SchedulerController controller;
+
+  @override
+  State<_ClassSelectionSheet> createState() => _ClassSelectionSheetState();
+}
+
+class _ClassSelectionSheetState extends State<_ClassSelectionSheet> {
+  // Filter state
+  final _selectedCampuses = <String>{};
+  var _ratingFilter = 0; // 0=all, 1>=4.0, 2>=3.0, 3<3.0
+  final _selectedDays = <int>{};
+  var _isPreloading = true;
+
+  late final List<String> _campusOptions;
+  late final List<_DayOption> _dayOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    final allClasses = widget.course.classes;
+    _campusOptions = allClasses
+        .map((c) => c.campus)
+        .where((c) => c.isNotEmpty)
+        .toSet()
+        .toList(growable: false)
+      ..sort();
+
+    final daySet = <int>{};
+    for (final c in allClasses) {
+      for (final a in c.arrangements) {
+        if (a.occupyDay >= 1 && a.occupyDay <= 7) daySet.add(a.occupyDay);
+      }
+    }
+    _dayOptions = daySet.map((d) => _DayOption(d)).toList(growable: false)
+      ..sort((a, b) => a.day.compareTo(b.day));
+
+    // Pre-load review info into the controller's shared cache.
+    // Rating filter becomes usable only after this completes.
+    _preloadReviews();
+  }
+
+  Future<void> _preloadReviews() async {
+    await widget.controller.preloadCourseReviews(widget.course);
+    if (!mounted) return;
+    setState(() => _isPreloading = false);
+  }
+
+  List<SchedulerClass> get _filteredClasses {
+    return widget.course.classes.where((classInfo) {
+      // Campus filter
+      if (_selectedCampuses.isNotEmpty &&
+          !_selectedCampuses.contains(classInfo.campus)) {
+        return false;
+      }
+
+      // Rating filter — uses controller's shared cache.
+      if (_ratingFilter > 0) {
+        final review = widget.controller.reviewCache[classInfo.code];
+        if (review == null || review.reviewCount <= 0) return false;
+        final rating = review.rating;
+        if (_ratingFilter == 1 && rating < 4.0) return false;
+        if (_ratingFilter == 2 && rating < 3.0) return false;
+        if (_ratingFilter == 3 && rating >= 3.0) return false;
+      }
+
+      // Day filter
+      if (_selectedDays.isNotEmpty) {
+        final classDays = classInfo.arrangements
+            .map((a) => a.occupyDay)
+            .where((d) => d >= 1 && d <= 7)
+            .toSet();
+        if (classDays.isEmpty || !classDays.any(_selectedDays.contains)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList(growable: false);
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedCampuses.isNotEmpty ||
+      _ratingFilter > 0 ||
+      _selectedDays.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final filtered = _filteredClasses;
+    final total = widget.course.classes.length;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.82,
+      minChildSize: 0.42,
+      maxChildSize: 0.94,
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        children: [
+          // Title row with active-filter badge
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.course.courseName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (_isPreloading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              if (!_isPreloading && _hasActiveFilters)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      '${filtered.length}/$total',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // -- Rating filter: segmented control --
+          SizedBox(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('全部')),
+                  ButtonSegment(value: 1, label: Text('推荐+')),
+                  ButtonSegment(value: 2, label: Text('中等+')),
+                  ButtonSegment(value: 3, label: Text('谨慎')),
+                ],
+                selected: {_ratingFilter},
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  ),
+                ),
+                onSelectionChanged: _isPreloading
+                    ? null
+                    : (value) => setState(() => _ratingFilter = value.single),
+              ),
+            ),
+          ),
+          if (_isPreloading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                '正在加载评课数据，稍后可启用评分筛选…',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // -- Campus filter: horizontal chips --
+          if (_campusOptions.isNotEmpty)
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _campusOptions.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final campus = _campusOptions[index];
+                  final selected = _selectedCampuses.contains(campus);
+                  return FilterChip(
+                    label: Text(campus, style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          _selectedCampuses.add(campus);
+                        } else {
+                          _selectedCampuses.remove(campus);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // -- Day filter: horizontal chips --
+          if (_dayOptions.isNotEmpty)
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _dayOptions.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final option = _dayOptions[index];
+                  final selected = _selectedDays.contains(option.day);
+                  return FilterChip(
+                    label:
+                        Text(option.label, style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          _selectedDays.add(option.day);
+                        } else {
+                          _selectedDays.remove(option.day);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // -- Filtered class list --
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  '没有匹配筛选条件的教学班',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            )
+          else
+            for (final classInfo in filtered)
+              _ClassDetail(
+                course: widget.course,
+                classInfo: classInfo,
+                controller: widget.controller,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayOption {
+  const _DayOption(this.day);
+
+  final int day;
+
+  String get label => const [
+        '',
+        '周一',
+        '周二',
+        '周三',
+        '周四',
+        '周五',
+        '周六',
+        '周日',
+      ][day];
 }
 
 class _ClassDetail extends StatelessWidget {
@@ -2593,6 +2961,63 @@ class _MiniLoader extends StatelessWidget {
   }
 }
 
+class _CourseChangeBanner extends StatelessWidget {
+  const _CourseChangeBanner({required this.changes});
+
+  final List<CourseChange> changes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final closedCount = changes.where((c) => c.type == CourseChangeType.closed).length;
+    final changedCount = changes.where((c) => c.type == CourseChangeType.infoChanged).length;
+    final parts = <String>[];
+    if (closedCount > 0) parts.add('$closedCount 个教学班已关闭');
+    if (changedCount > 0) parts.add('$changedCount 个教学班安排有变动');
+    final summary = parts.join('，');
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 18, color: scheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '课程数据有变动',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    summary,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NoticeStrip extends StatelessWidget {
   const _NoticeStrip({required this.text});
 
@@ -2784,6 +3209,19 @@ int? _timeLookupSectionForSlot(int slot, int? calendarId) {
     10 || 11 || 12 when !isNewElevenSlotCalendar => 6,
     11 when isNewElevenSlotCalendar => 6,
     _ => null,
+  };
+}
+
+/// Returns the slot numbers covered by the given [section] group (1-6).
+List<int> _slotsForSection(int section) {
+  return switch (section) {
+    1 => [1, 2],
+    2 => [3, 4],
+    3 => [5, 6],
+    4 => [7, 8],
+    5 => [9],
+    6 => [10, 11, 12],
+    _ => [section],
   };
 }
 
