@@ -2017,7 +2017,7 @@ class _ReviewShareImagePainter {
         return ph + 8;
       }
       // Fallback: show alt text when image not loaded.
-      final label = block.text.isNotEmpty ? '[图片] $block.text' : '[图片]';
+      final label = block.text.isNotEmpty ? '[图片] ${block.text}' : '[图片]';
       final labelStyle = TextStyle(
         color: _imagePlaceholderTextColor,
         fontSize: 13,
@@ -2682,14 +2682,19 @@ Future<Uint8List> renderReviewShareImage(
     final url = (match.group(1) ?? match.group(2) ?? '').trim();
     if (url.isNotEmpty) imageUrls.add(url);
   }
-  final loadedImages = <String, ui.Image?>{};
-  for (final url in imageUrls) {
-    try {
-      loadedImages[url] = await _loadShareImage(url);
-    } catch (_) {
-      loadedImages[url] = null;
-    }
-  }
+  final loadedResults = await Future.wait(
+    imageUrls.map((url) async {
+      try {
+        final image = await _loadShareImage(url);
+        return MapEntry(url, image);
+      } catch (_) {
+        return MapEntry(url, null);
+      }
+    }),
+  );
+  final loadedImages = <String, ui.Image?>{
+    for (final entry in loadedResults) entry.key: entry.value,
+  };
 
   final painter = _ReviewShareImagePainter(
     course: course,
