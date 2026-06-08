@@ -17,6 +17,7 @@ final schedulerControllerProvider =
 class SchedulerState {
   const SchedulerState({
     this.calendars = const [],
+    this.courseChanges = const [],
     this.grades = const [],
     this.majors = const [],
     this.majorCourses = const [],
@@ -37,6 +38,7 @@ class SchedulerState {
   });
 
   final List<CalendarTerm> calendars;
+  final List<CourseChange> courseChanges;
   final List<int> grades;
   final List<MajorInfo> majors;
   final List<SchedulerCourse> majorCourses;
@@ -69,6 +71,7 @@ class SchedulerState {
 
   SchedulerState copyWith({
     List<CalendarTerm>? calendars,
+    List<CourseChange>? courseChanges,
     List<int>? grades,
     List<MajorInfo>? majors,
     List<SchedulerCourse>? majorCourses,
@@ -92,6 +95,7 @@ class SchedulerState {
   }) {
     return SchedulerState(
       calendars: calendars ?? this.calendars,
+      courseChanges: courseChanges ?? this.courseChanges,
       grades: grades ?? this.grades,
       majors: majors ?? this.majors,
       majorCourses: majorCourses ?? this.majorCourses,
@@ -621,6 +625,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     ];
     state = AsyncData(current.copyWith(selected: selected, notice: '已加入模拟课表'));
     _persistSelectedClasses(selected);
+    unawaited(_updateSnapshotsAndSync());
   }
 
   void replaceClass({
@@ -645,6 +650,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     ];
     state = AsyncData(current.copyWith(selected: selected, notice: '已替换模拟课表'));
     _persistSelectedClasses(selected);
+    unawaited(_updateSnapshotsAndSync());
   }
 
   Future<void> saveSelectedClasses() async {
@@ -660,6 +666,7 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
         .toList(growable: false);
     state = AsyncData(current.copyWith(selected: selected, clearNotice: true));
     _persistSelectedClasses(selected);
+    unawaited(_updateSnapshotsAndSync());
   }
 
   void clearSelectedClasses() {
@@ -800,6 +807,161 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     return current.selected.map((s) => s.course.courseCode).toSet();
   }
 
+  // ─── Course change detection ──────────────────────────────────────
+
+  static const _snapshotKey = 'de.yourtj.course.scheduler.snapshots';
+  Timer? _syncTimer;
+
+  /// Take a snapshot of the current schedule and persist it.
+  Future<void> _saveSnapshots() async {
+    final current = state.value;
+    if (current == null || current.selected.isEmpty) return;
+    final snapshots = current.selected
+        .map(ScheduledClassSnapshot.fromScheduledClass)
+        .toList(growable: false);
+    final data = snapshots.map((s) => s.toJson()).toList(growable: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_snapshotKey, jsonEncode(data));
+  }
+
+  /// Restore snapshots from storage.
+  Future<List<ScheduledClassSnapshot>> _loadSnapshots() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_snapshotKey);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded
+          .map(ScheduledClassSnapshot.fromJson)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Check for changes by fetching fresh data and comparing.
+  Future<List<CourseChange>> checkForChanges() async {
+    final current = state.value;
+    if (current == null || current.selected.isEmpty) return [];
+
+    final snapshots = await _loadSnapshots();
+    if (snapshots.isEmpty) {
+      // First time — just save and return.
+      await _saveSnapshots();
+      return [];
+    }
+
+    final changes = <CourseChange>[];
+    final snapshotByCode = {
+      for (final s in snapshots) s.classCode: s,
+    };
+
+    // Fetch fresh data for all selected courses.
+    final courseCodes = current.selected
+        .map((s) => s.course.courseCode)
+        .toSet()
+        .toList(growable: false);
+
+    final freshClasses = <ScheduledClassSnapshot>[];
+    for (final code in courseCodes) {
+      try {
+        final classes = await _repository.findCourseDetailByCode(
+          calendarId: current.selectedCalendarId ?? 0,
+          courseCode: code,
+          cancelToken: _cancelToken,
+        );
+        for (final c in classes) {
+          final sc = current.selected
+              .where((s) => s.classInfo.code == c.code)
+              .firstOrNull;
+          if (sc != null) {
+            freshClasses.add(
+              ScheduledClassSnapshot.fromScheduledClass(
+                ScheduledClass(course: sc.course, classInfo: c),
+              ),
+            );
+          }
+        }
+      } catch (_) {
+        // Skip failed fetches.
+      }
+    }
+
+    // Compare fresh vs snapshot.
+    final freshByCode = {for (final f in freshClasses) f.classCode: f};
+    final allCodes = {
+      ...snapshotByCode.keys,
+      ...freshByCode.keys,
+    };
+
+    for (final code in allCodes) {
+      final old = snapshotByCode[code];
+      final fresh = freshByCode[code];
+      if (old == null && fresh != null) {
+        // New class appeared (unlikely but handle).
+        continue;
+      }
+      if (old != null && fresh == null) {
+        // Class disappeared — likely closed.
+        changes.add(
+          CourseChange(
+            type: CourseChangeType.closed,
+            courseCode: old.courseCode,
+            courseName: old.courseName,
+            detail: '教学班 $code 已关闭',
+          ),
+        );
+        continue;
+      }
+      if (old != null && fresh != null) {
+        final oldArr = old.arrangementTexts.toSet();
+        final freshArr = fresh.arrangementTexts.toSet();
+        if (oldArr != freshArr) {
+          changes.add(
+            CourseChange(
+              type: CourseChangeType.infoChanged,
+              courseCode: old.courseCode,
+              courseName: old.courseName,
+              detail: '教学班 $code 上课安排已变更',
+              affectedCodes: [code],
+            ),
+          );
+        }
+      }
+    }
+
+    if (changes.isNotEmpty) {
+      // Save new snapshots for next comparison.
+      await _saveSnapshots();
+      // Update state with changes.
+      final latest = state.value ?? current;
+      state = AsyncData(latest.copyWith(courseChanges: changes));
+    }
+
+    return changes;
+  }
+
+  /// Start periodic sync (every 30 minutes).
+  void startPeriodicSync() {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      checkForChanges();
+    });
+  }
+
+  /// Stop periodic sync.
+  void stopPeriodicSync() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+  }
+
+  void _ensureSyncOnSelection() {
+    _syncTimer ??= Timer.periodic(const Duration(minutes: 30), (_) {
+      checkForChanges();
+    });
+  }
+
   Future<void> _persistSelectedClasses(List<ScheduledClass> selected) async {
     final preferences = await SharedPreferences.getInstance();
     if (selected.isEmpty) {
@@ -808,6 +970,11 @@ class SchedulerController extends AsyncNotifier<SchedulerState> {
     }
     final data = selected.map((item) => item.toJson()).toList(growable: false);
     await preferences.setString(_selectedStorageKey, jsonEncode(data));
+  }
+
+  Future<void> _updateSnapshotsAndSync() async {
+    await _saveSnapshots();
+    _ensureSyncOnSelection();
   }
 
   Future<void> _guard(Future<void> Function() run) async {

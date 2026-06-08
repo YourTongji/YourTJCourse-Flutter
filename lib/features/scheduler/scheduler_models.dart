@@ -446,3 +446,100 @@ extension _ListFallback<T> on List<T> {
     return isEmpty ? fallback : this;
   }
 }
+
+// ─── Course change detection models ──────────────────────────────────
+
+/// What kind of change was detected for a course.
+enum CourseChangeType { closed, infoChanged, conflictAfterUpdate }
+
+/// Details of a single course change.
+class CourseChange {
+  const CourseChange({
+    required this.type,
+    required this.courseCode,
+    required this.courseName,
+    this.detail,
+    this.affectedCodes = const [],
+  });
+
+  factory CourseChange.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    final raw = readString(map['type']) ?? '';
+    return CourseChange(
+      type: CourseChangeType.values.firstWhere(
+        (t) => t.name == raw,
+        orElse: () => CourseChangeType.infoChanged,
+      ),
+      courseCode: readString(map['courseCode']) ?? '',
+      courseName: readString(map['courseName']) ?? '',
+      detail: readString(map['detail']),
+      affectedCodes: readStringList(map['affectedCodes']),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'type': type.name,
+    'courseCode': courseCode,
+    'courseName': courseName,
+    'detail': detail,
+    'affectedCodes': affectedCodes,
+  };
+
+  final CourseChangeType type;
+  final String courseCode;
+  final String courseName;
+  final String? detail;
+  final List<String> affectedCodes;
+}
+
+/// Snapshot of a scheduled class used for change detection.
+class ScheduledClassSnapshot {
+  const ScheduledClassSnapshot({
+    required this.classCode,
+    required this.courseCode,
+    required this.courseName,
+    required this.teacherNames,
+    required this.arrangementTexts,
+  });
+
+  factory ScheduledClassSnapshot.fromScheduledClass(ScheduledClass sc) {
+    return ScheduledClassSnapshot(
+      classCode: sc.classInfo.code,
+      courseCode: sc.course.courseCode,
+      courseName: sc.course.courseName,
+      teacherNames: sc.classInfo.teachers
+          .map((t) => t.teacherName)
+          .where((n) => n.isNotEmpty)
+          .toList(growable: false),
+      arrangementTexts: sc.classInfo.arrangements
+          .map((a) => a.arrangementText)
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+
+  factory ScheduledClassSnapshot.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return ScheduledClassSnapshot(
+      classCode: readString(map['classCode']) ?? '',
+      courseCode: readString(map['courseCode']) ?? '',
+      courseName: readString(map['courseName']) ?? '',
+      teacherNames: readStringList(map['teacherNames']),
+      arrangementTexts: readStringList(map['arrangementTexts']),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'classCode': classCode,
+    'courseCode': courseCode,
+    'courseName': courseName,
+    'teacherNames': teacherNames,
+    'arrangementTexts': arrangementTexts,
+  };
+
+  final String classCode;
+  final String courseCode;
+  final String courseName;
+  final List<String> teacherNames;
+  final List<String> arrangementTexts;
+}
