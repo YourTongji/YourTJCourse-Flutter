@@ -44,5 +44,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Agent related
+ClAUDE.md
+AGENTS.md
+.claude/
 /android/key.properties
 /android/app/*.jks
