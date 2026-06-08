@@ -129,11 +129,13 @@ class CatalogController extends AsyncNotifier<CatalogState> {
       final results = await Future.wait([departmentsFuture, coursesFuture]);
       final departments = results[0] as List<String>;
       final courses = results[1] as dynamic;
+      final data = courses.data as List<Course>;
+      final total = courses.total as int?;
       return CatalogState(
         departments: departments,
-        courses: courses.data as List<Course>,
-        hasMore: courses.hasMore as bool,
-        totalCount: courses.total as int?,
+        courses: data,
+        hasMore: _computeHasMore(data.length, total, courses.hasMore as bool),
+        totalCount: total,
       );
     } catch (error) {
       if (isRequestCancellation(error)) {
@@ -172,10 +174,16 @@ class CatalogController extends AsyncNotifier<CatalogState> {
         cancelToken: _cancelToken,
       );
       _page = nextPage;
+      final totalItems = value.totalCount;
+      final allCourses = [...value.courses, ...response.data];
       state = AsyncData(
         value.copyWith(
-          courses: [...value.courses, ...response.data],
-          hasMore: response.hasMore,
+          courses: allCourses,
+          hasMore: _computeHasMore(
+            allCourses.length,
+            totalItems,
+            response.hasMore,
+          ),
           isLoadingMore: false,
         ),
       );
@@ -254,6 +262,19 @@ class CatalogController extends AsyncNotifier<CatalogState> {
       ),
     );
     unawaited(refresh());
+  }
+
+  /// When [totalCount] is known (from an `includeTotal` response), derive
+  /// [hasMore] from how many items we have vs the total.  The backend
+  /// incorrectly returns `hasMore: false` when `includeTotal` is true, so
+  /// we cannot trust the API value in that case.
+  static bool _computeHasMore(
+    int loadedCount,
+    int? totalCount,
+    bool apiHasMore,
+  ) {
+    if (totalCount != null) return loadedCount < totalCount;
+    return apiHasMore;
   }
 
   Future<CatalogState> _loadPage(CatalogState base, {required int page}) async {
