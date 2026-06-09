@@ -50,16 +50,23 @@ class MaintenanceConfig {
     this.message,
     this.estimatedDowntime,
     this.lastUpdated,
+    this.progress,
   });
 
   factory MaintenanceConfig.fromJson(Object? json) {
     final map = asJsonMap(json);
+    final progressJson = map['progress'];
     return MaintenanceConfig(
       title: readString(map['title']),
       message: readString(map['message']),
       estimatedDowntime:
           readString(map['estimated_downtime']) ?? readString(map['eta']),
       lastUpdated: readString(map['lastUpdated']),
+      progress: progressJson is List
+          ? progressJson
+                .map(MaintenanceProgressItem.fromJson)
+                .toList(growable: false)
+          : null,
     );
   }
 
@@ -67,6 +74,28 @@ class MaintenanceConfig {
   final String? message;
   final String? estimatedDowntime;
   final String? lastUpdated;
+  final List<MaintenanceProgressItem>? progress;
+}
+
+class MaintenanceProgressItem {
+  const MaintenanceProgressItem({
+    required this.label,
+    this.done = false,
+    this.current = false,
+  });
+
+  factory MaintenanceProgressItem.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return MaintenanceProgressItem(
+      label: readString(map['label']) ?? '',
+      done: readBool(map['done']) ?? false,
+      current: readBool(map['current']) ?? false,
+    );
+  }
+
+  final String label;
+  final bool done;
+  final bool current;
 }
 
 class Announcement {
