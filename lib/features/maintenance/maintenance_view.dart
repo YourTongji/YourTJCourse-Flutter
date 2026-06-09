@@ -50,6 +50,8 @@ class MaintenanceView extends ConsumerWidget {
             if (!maintenance.enabled) return const SizedBox.shrink();
 
             final config = maintenance.config;
+            final downtime = config?.estimatedDowntime;
+            final progress = config?.progress;
             return RefreshIndicator(
               onRefresh: () => ref.read(maintenanceStateProvider.notifier).refresh(),
               child: ListView(
@@ -92,7 +94,7 @@ class MaintenanceView extends ConsumerWidget {
                   const SizedBox(height: 24),
 
                   // ── Estimated downtime ────────────────
-                  if (config?.estimatedDowntime != null)
+                  if (downtime != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
@@ -106,7 +108,7 @@ class MaintenanceView extends ConsumerWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '预计耗时：${config!.estimatedDowntime}',
+                              '预计耗时：$downtime',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
@@ -115,11 +117,11 @@ class MaintenanceView extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  if (config?.estimatedDowntime != null) const SizedBox(height: 20),
+                  if (downtime != null) const SizedBox(height: 20),
 
                   // ── Progress steps ────────────────────
-                  if (config?.progress != null && config!.progress!.isNotEmpty)
-                    _ProgressSteps(config: config, theme: theme, scheme: scheme),
+                  if (progress != null && progress.isNotEmpty)
+                    _ProgressSteps(steps: progress, theme: theme, scheme: scheme),
 
                   const SizedBox(height: 32),
 
@@ -170,18 +172,17 @@ class MaintenanceView extends ConsumerWidget {
 
 class _ProgressSteps extends StatelessWidget {
   const _ProgressSteps({
-    required this.config,
+    required this.steps,
     required this.theme,
     required this.scheme,
   });
 
-  final MaintenanceConfig config;
+  final List<MaintenanceProgressItem> steps;
   final ThemeData theme;
   final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    final steps = config.progress!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -20,35 +20,30 @@ class MaintenanceController extends AsyncNotifier<MaintenanceState> {
 
   @override
   Future<MaintenanceState> build() async {
+    // Fetch once, then poll periodically.
     final state = await _fetch();
-    _startPolling();
-    ref.onDispose(() => _pollTimer?.cancel());
-    return state;
-  }
-
-  void _startPolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       ref.invalidateSelf();
     });
+    ref.onDispose(() => _pollTimer?.cancel());
+    return state;
   }
 
   Future<MaintenanceState> _fetch() async {
     try {
       final runtimeState = await ref
-          .watch(settingsRepositoryProvider)
+          .read(settingsRepositoryProvider)
           .getRuntimeState();
       return runtimeState.maintenance;
     } catch (_) {
-      // If the fetch fails (no network), return the last known state or
-      // a default disabled state.
+      // Fetch failed (no network) — keep last known state or default disabled.
       return state.value ?? const MaintenanceState(enabled: false);
     }
   }
 
-  /// Recheck maintenance state immediately (e.g., on pull-to-refresh).
-  Future<void> refresh() {
-    _pollTimer?.cancel();
-    return build();
+  /// Recheck maintenance state immediately (e.g., pull-to-refresh).
+  Future<void> refresh() async {
+    ref.invalidateSelf();
   }
 }
