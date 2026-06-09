@@ -74,11 +74,13 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
                       trailing: [
                         catalog.maybeWhen(
                           data: (s) => s.isSearching
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                              ? const SizedBox.square(
+                                  dimension: 48,
+                                  child: Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 )
                               : IconButton(
@@ -101,14 +103,19 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
                       onChanged: controller.setSearchText,
                     ),
                     // Linear progress bar during search.
-                    catalog.maybeWhen(
-                      data: (s) => s.isSearching
-                          ? const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: LinearProgressIndicator(minHeight: 2),
-                            )
-                          : const SizedBox.shrink(),
-                      orElse: () => const SizedBox.shrink(),
+                    // Fixed-height slot to prevent layout shift when
+                    // the progress bar appears / disappears.
+                    SizedBox(
+                      height: 12,
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: catalog.maybeWhen(
+                          data: (s) => s.isSearching
+                              ? const LinearProgressIndicator(minHeight: 2)
+                              : const SizedBox.shrink(),
+                          orElse: () => const SizedBox.shrink(),
+                        ),
+                      ),
                     ),
                     catalog.maybeWhen(
                       data: (state) => state.hasAdvancedFilters

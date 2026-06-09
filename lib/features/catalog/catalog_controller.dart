@@ -153,6 +153,7 @@ class CatalogController extends AsyncNotifier<CatalogState> {
 
   Future<void> refresh() async {
     final value = state.value ?? const CatalogState();
+    final snapshotSearchText = value.searchText;
     _page = 1;
     final current = state.value;
     if (current != null) {
@@ -162,7 +163,12 @@ class CatalogController extends AsyncNotifier<CatalogState> {
     }
     try {
       final result = await _loadPage(value, page: 1);
-      state = AsyncData(result.copyWith(isSearching: false));
+      // Preserve any user input that arrived while the API call was in flight.
+      final latest = state.value;
+      final merged = latest != null && latest.searchText != snapshotSearchText;
+      state = AsyncData(
+        (merged ? latest : result).copyWith(isSearching: false),
+      );
     } catch (error, stack) {
       if (isRequestCancellation(error)) {
         state = AsyncData(value.copyWith(isSearching: false));
