@@ -120,3 +120,16 @@ class ApiClient {
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(ref.watch(dioProvider));
 });
+
+/// Separate Dio instance pointed at the credit/wallet API server.
+final creditDioProvider = Provider<Dio>((ref) {
+  final config = ref.watch(appConfigProvider);
+  return Dio(
+    BaseOptions(
+      baseUrl: config.creditApiBaseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+      headers: const {'Accept': 'application/json'},
+    ),
+  );
+});

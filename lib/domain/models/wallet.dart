@@ -1,12 +1,38 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:crypto/crypto.dart';
+
 import 'json_helpers.dart';
 
-/// Wallet credentials generated on first launch.
+/// Unwraps the credit API envelope: { success: bool, data: T, error: string }.
+T? _unwrapCreditResponse<T>(Object? json, T Function(Object?) fromJson) {
+  if (json is! Map) return null;
+  final success = json['success'] == true;
+  if (!success) return null;
+  final data = json['data'];
+  return data != null ? fromJson(data) : null;
+}
+
+/// Wallet credentials — generated client-side from a random seed.
+/// Keys are deterministic from the mnemonic.
 class WalletCredentials {
   const WalletCredentials({
     required this.mnemonic,
     required this.userHash,
     required this.userSecret,
   });
+
+  /// Generate fresh credentials from a random seed.
+  factory WalletCredentials.generate() {
+    final seed = List<int>.generate(16, (_) => math.Random().nextInt(256));
+    final sha = sha256.convert(seed).bytes;
+    final userHash = sha.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final userSecret = base64Encode(sha);
+    // Simple mnemonic from hex encoding of the seed.
+    final mnemonic = seed.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+    return WalletCredentials(mnemonic: mnemonic, userHash: userHash, userSecret: userSecret);
+  }
 
   factory WalletCredentials.fromJson(Object? json) {
     final map = asJsonMap(json);
@@ -26,28 +52,6 @@ class WalletCredentials {
   final String mnemonic;
   final String userHash;
   final String userSecret;
-}
-
-/// Wallet registration returned from the backend.
-class WalletRegistration {
-  const WalletRegistration({
-    required this.userHash,
-    required this.userSecret,
-    required this.mnemonic,
-  });
-
-  factory WalletRegistration.fromJson(Object? json) {
-    final map = asJsonMap(json);
-    return WalletRegistration(
-      userHash: readString(map['user_hash']) ?? '',
-      userSecret: readString(map['user_secret']) ?? '',
-      mnemonic: readString(map['mnemonic']) ?? '',
-    );
-  }
-
-  final String userHash;
-  final String userSecret;
-  final String mnemonic;
 }
 
 /// Credit wallet snapshot from the backend.
@@ -71,6 +75,11 @@ class CreditWallet {
           ? WalletTodaySummary.fromJson(map['today'])
           : null,
     );
+  }
+
+  /// Parse from the credit API response envelope.
+  static CreditWallet? fromApiResponse(Object? json) {
+    return _unwrapCreditResponse(json, CreditWallet.fromJson);
   }
 
   final String userHash;

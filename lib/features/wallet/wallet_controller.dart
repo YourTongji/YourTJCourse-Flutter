@@ -29,14 +29,15 @@ class WalletController extends AsyncNotifier<CreditWallet> {
     final savedHash = await _secureStorage.read(key: _hashKey);
 
     if (savedHash == null || savedHash.isEmpty) {
-      // First launch — register a new wallet.
-      final reg = await _repository.registerWallet(
+      // First launch — generate credentials client-side and register.
+      final creds = WalletCredentials.generate();
+      final wallet = await _repository.registerWallet(creds,
         cancelToken: _cancelToken,
       );
-      await _secureStorage.write(key: _mnemonicKey, value: reg.mnemonic);
-      await _secureStorage.write(key: _hashKey, value: reg.userHash);
-      await _secureStorage.write(key: _secretKey, value: reg.userSecret);
-      return CreditWallet(userHash: reg.userHash, balance: 0);
+      await _secureStorage.write(key: _mnemonicKey, value: creds.mnemonic);
+      await _secureStorage.write(key: _hashKey, value: creds.userHash);
+      await _secureStorage.write(key: _secretKey, value: creds.userSecret);
+      return wallet;
     }
 
     // Return wallet with balance from backend.
