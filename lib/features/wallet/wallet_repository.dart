@@ -45,7 +45,7 @@ class WalletRepository {
       '/api/review/$reviewId/edit-token',
       body: {
         'edit_token': editToken,
-        'walletUserHash': walletUserHash,
+        'wallet_user_hash': walletUserHash,
       },
       cancelToken: cancelToken,
       decode: (_) {},
