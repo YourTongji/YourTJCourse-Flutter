@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/app_states.dart';
 import 'wallet_controller.dart';
@@ -37,12 +38,23 @@ class WalletView extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('钱包初始化失败', textAlign: TextAlign.center),
+                    Icon(Icons.account_balance_wallet_outlined,
+                        size: 64, color: scheme.primary.withValues(alpha: 0.5)),
                     const SizedBox(height: 16),
+                    Text('尚未注册钱包',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Text(
+                      '使用学号和 PIN 注册钱包后，\n可跨设备同步积分、获得评价奖励',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 24),
                     FilledButton.icon(
-                      onPressed: () => ref.invalidate(walletProvider),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('重试'),
+                      onPressed: () => context.push('/wallet/register'),
+                      icon: const Icon(Icons.how_to_reg),
+                      label: const Text('注册钱包'),
                     ),
                   ],
                 ),

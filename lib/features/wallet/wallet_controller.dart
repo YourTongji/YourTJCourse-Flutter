@@ -48,13 +48,8 @@ class WalletController extends AsyncNotifier<WalletState> {
       await _secureStorage.delete(key: _mnemonicKey);
       await _secureStorage.delete(key: _hashKey);
       await _secureStorage.delete(key: _secretKey);
-      // First launch — generate credentials and register.
-      final creds = WalletCredentials.generate();
-      final wallet = await _repository.registerWallet(creds, cancelToken: cancelToken);
-      await _secureStorage.write(key: _mnemonicKey, value: creds.mnemonic);
-      await _secureStorage.write(key: _hashKey, value: creds.userHash);
-      await _secureStorage.write(key: _secretKey, value: creds.userSecret);
-      return WalletState(userHash: creds.userHash, balance: wallet.balance);
+      // No credentials yet — user must register via /wallet/register.
+      return const WalletState(userHash: '', balance: 0);
     }
 
     // Fetch wallet, then summary in the background.
@@ -63,6 +58,13 @@ class WalletController extends AsyncNotifier<WalletState> {
     final wallet = await _repository.fetchWallet(savedHash, cancelToken: cancelToken);
     final summary = await _repository.fetchSummary(savedHash, cancelToken: cancelToken);
     return WalletState(userHash: wallet.userHash, balance: wallet.balance, summary: summary);
+  }
+
+  /// Persist wallet credentials to secure storage (called after register/restore).
+  Future<void> persistCredentials(WalletCredentials creds) async {
+    await _secureStorage.write(key: _mnemonicKey, value: creds.mnemonic);
+    await _secureStorage.write(key: _hashKey, value: creds.userHash);
+    await _secureStorage.write(key: _secretKey, value: creds.userSecret);
   }
 
   /// Persisted wallet credentials.
