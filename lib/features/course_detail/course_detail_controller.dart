@@ -387,8 +387,8 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     String? reviewerName,
     String? reviewerAvatar,
   }) async {
-    final creds = await ref.read(walletProvider.notifier).loadCredentials();
     try {
+      final creds = await ref.read(walletProvider.notifier).loadCredentials();
       final response = await _reviewRepository.updateReview(
         reviewId: reviewId,
         rating: rating,

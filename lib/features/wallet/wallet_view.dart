@@ -22,10 +22,21 @@ class WalletView extends ConsumerWidget {
         data: (data) {
           final hasWallet = data.userHash.isNotEmpty;
           if (!hasWallet) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('钱包初始化失败，请重试', textAlign: TextAlign.center),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('钱包初始化失败，请重试', textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () => ref.invalidate(walletProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('重试'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
