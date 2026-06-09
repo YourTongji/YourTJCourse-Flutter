@@ -286,6 +286,10 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
       _commentController.text = edit.comment;
       _rating = edit.rating;
       _semester = edit.semester.isNotEmpty ? edit.semester : _semesterOptions.first;
+      if (edit.reviewerName?.isNotEmpty ?? false) {
+        _nameController.text = edit.reviewerName!;
+        _showReviewer = true;
+      }
     } else {
       _semester = _semesterOptions.first;
     }
