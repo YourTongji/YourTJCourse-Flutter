@@ -29,6 +29,7 @@ class CatalogState {
     this.faculty = '',
     this.hasMore = true,
     this.isLoadingMore = false,
+    this.isSearching = false,
     this.totalCount,
   });
 
@@ -45,6 +46,7 @@ class CatalogState {
   final String faculty;
   final bool hasMore;
   final bool isLoadingMore;
+  final bool isSearching;
   final int? totalCount;
 
   bool get hasAdvancedFilters {
@@ -83,6 +85,7 @@ class CatalogState {
     String? faculty,
     bool? hasMore,
     bool? isLoadingMore,
+    bool? isSearching,
     int? totalCount,
   }) {
     return CatalogState(
@@ -99,6 +102,7 @@ class CatalogState {
       faculty: faculty ?? this.faculty,
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      isSearching: isSearching ?? this.isSearching,
       totalCount: totalCount ?? this.totalCount,
     );
   }
@@ -149,11 +153,29 @@ class CatalogController extends AsyncNotifier<CatalogState> {
 
   Future<void> refresh() async {
     final value = state.value ?? const CatalogState();
+    final snapshotSearchText = value.searchText;
     _page = 1;
-    if (state.value == null) {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(isSearching: true));
+    } else {
       state = const AsyncLoading<CatalogState>();
     }
-    state = await AsyncValue.guard(() => _loadPage(value, page: 1));
+    try {
+      final result = await _loadPage(value, page: 1);
+      // Preserve any user input that arrived while the API call was in flight.
+      final latest = state.value;
+      final merged = latest != null && latest.searchText != snapshotSearchText;
+      state = AsyncData(
+        (merged ? latest : result).copyWith(isSearching: false),
+      );
+    } catch (error, stack) {
+      if (isRequestCancellation(error)) {
+        state = AsyncData(value.copyWith(isSearching: false));
+        return;
+      }
+      state = AsyncError<CatalogState>(error, stack);
+    }
   }
 
   Future<void> loadMore() async {

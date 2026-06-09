@@ -1499,13 +1499,11 @@ class _BeamAvatarData {
   }
 }
 
-Future<ui.Image?> _loadShareAvatarImage(Review review) async {
-  final avatarUrl = review.reviewerAvatar?.trim() ?? '';
-  if (!avatarUrl.startsWith('http')) return null;
-
+Future<ui.Image?> _loadShareImage(String url) async {
+  if (!url.startsWith('http')) return null;
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
   try {
-    final uri = Uri.parse(avatarUrl);
+    final uri = Uri.parse(url);
     final request = await client.getUrl(uri);
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) return null;
@@ -1521,12 +1519,19 @@ Future<ui.Image?> _loadShareAvatarImage(Review review) async {
   }
 }
 
+Future<ui.Image?> _loadShareAvatarImage(Review review) async {
+  final avatarUrl = review.reviewerAvatar?.trim() ?? '';
+  if (!avatarUrl.startsWith('http')) return null;
+  return _loadShareImage(avatarUrl);
+}
+
 class _ReviewShareImagePainter {
-  const _ReviewShareImagePainter({
+  _ReviewShareImagePainter({
     required this.course,
     required this.review,
     required this.avatar,
-  });
+    Map<String, ui.Image?>? loadedImages,
+  }) : _loadedImages = loadedImages ?? const {};
 
   static const width = 640.0;
   static const _padding = 28.0;
@@ -1535,6 +1540,7 @@ class _ReviewShareImagePainter {
   final CourseDetail course;
   final Review review;
   final ui.Image? avatar;
+  final Map<String, ui.Image?> _loadedImages;
 
   Size measure() {
     final title = _measureText(
@@ -1810,7 +1816,7 @@ class _ReviewShareImagePainter {
     canvas.restore();
   }
 
-  static void _paintBeamAvatar(Canvas canvas, Size size, String seed) {
+  void _paintBeamAvatar(Canvas canvas, Size size, String seed) {
     const colors = _BeamAvatarPainter._colors;
     final data = _BeamAvatarData(seed: seed, colors: colors);
     final scale = size.shortestSide / _BeamAvatarData.canvasSize;
@@ -1905,7 +1911,7 @@ class _ReviewShareImagePainter {
     canvas.restore();
   }
 
-  static Size _measurePills(List<String> labels, double maxWidth) {
+  Size _measurePills(List<String> labels, double maxWidth) {
     var x = 0.0;
     var height = 31.0;
     var rows = 1;
@@ -1926,38 +1932,212 @@ class _ReviewShareImagePainter {
     return Size(maxWidth, height);
   }
 
-  static double _measureMarkdownBlocks(
+  double _measureMarkdownBlocks(
     List<_ShareMarkdownBlock> blocks, {
     required double maxWidth,
   }) {
     var height = 0.0;
-    for (final block in blocks) {
-      height += _markdownBlockHeight(block, maxWidth);
+    var i = 0;
+    while (i < blocks.length) {
+      if (blocks[i].type == _ShareMarkdownBlockType.table) {
+        final tableEnd = _findTableEnd(blocks, i);
+        final grouped = blocks.sublist(i, tableEnd);
+        height += _measureTableGroup(grouped, maxWidth);
+        i = tableEnd;
+      } else {
+        height += _markdownBlockHeight(blocks[i], maxWidth);
+        i++;
+      }
     }
     return math.max(28, height);
   }
 
-  static double _paintMarkdownBlocks(
+  double _paintMarkdownBlocks(
     Canvas canvas,
     List<_ShareMarkdownBlock> blocks,
     Offset offset, {
     required double maxWidth,
   }) {
     var y = offset.dy;
-    for (final block in blocks) {
-      y += _paintMarkdownBlock(canvas, block, Offset(offset.dx, y), maxWidth);
+    var i = 0;
+    while (i < blocks.length) {
+      if (blocks[i].type == _ShareMarkdownBlockType.table) {
+        final tableEnd = _findTableEnd(blocks, i);
+        final grouped = blocks.sublist(i, tableEnd);
+        y += _paintTableGroup(canvas, grouped, Offset(offset.dx, y), maxWidth);
+        i = tableEnd;
+      } else {
+        y += _paintMarkdownBlock(canvas, blocks[i], Offset(offset.dx, y), maxWidth);
+        i++;
+      }
     }
     return y - offset.dy;
   }
 
-  static double _markdownBlockHeight(
+  /// Find the end index of a consecutive run of table blocks starting at [start].
+  int _findTableEnd(List<_ShareMarkdownBlock> blocks, int start) {
+    var end = start + 1;
+    while (end < blocks.length &&
+        blocks[end].type == _ShareMarkdownBlockType.table) {
+      end++;
+    }
+    return end;
+  }
+
+  /// Parse a row text into individual cells (split by the │ separator).
+  List<String> _parseRowCells(String text) {
+    return text.split('│').map((c) => c.trim()).toList(growable: false);
+  }
+
+  static const _tableBorderWidth = 1.0;
+  static const _tableHeaderBg = Color(0xFFE2E8F0);
+  static const _tableRowEvenBg = Color(0xFFF8FAFC);
+  static const _tableRowOddBg = Color(0xFFFFFFFF);
+  static const _tableBorderColor = Color(0xFFCBD5E1);
+
+  /// Compute max pixel width for each column across all rows.
+  List<double> _computeColWidths(
+    List<List<String>> cells, int colCount, double maxWidth,
+  ) {
+    final widths = List.filled(colCount, 0.0);
+    for (final row in cells) {
+      for (var c = 0; c < row.length && c < colCount; c++) {
+        final p = _layoutText(
+          row[c],
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          maxWidth: maxWidth,
+        );
+        widths[c] = math.max(widths[c], p.width + 12);
+      }
+    }
+    // Clamp total width to maxWidth.
+    final total = widths.fold(0.0, (a, b) => a + b) +
+        (colCount - 1) * _tableBorderWidth;
+    if (total > maxWidth && total > (colCount - 1) * _tableBorderWidth) {
+      final contentWidth = total - (colCount - 1) * _tableBorderWidth;
+      final availableWidth = maxWidth - (colCount - 1) * _tableBorderWidth;
+      if (contentWidth > 0 && availableWidth > 0) {
+        final scale = availableWidth / contentWidth;
+        for (var c = 0; c < colCount; c++) { widths[c] *= scale; }
+      }
+    }
+    return widths;
+  }
+
+  /// Measure actual text height for a cell wrapped at [cellWidth].
+  double _cellHeight(String text, double cellWidth) {
+    final p = _layoutText(text, const TextStyle(fontSize: 13, fontWeight: FontWeight.w700), maxWidth: math.max(cellWidth - 8, 4));
+    return p.height + 8;
+  }
+
+  /// Compute row heights for a table given column widths.
+  List<double> _computeRowHeights(
+    List<List<String>> cells, List<double> colWidths, int colCount,
+  ) {
+    return cells.map((row) {
+      var maxH = 24.0;
+      for (var c = 0; c < row.length && c < colCount; c++) {
+        maxH = math.max(maxH, _cellHeight(row[c], colWidths[c]));
+      }
+      return maxH;
+    }).toList(growable: false);
+  }
+
+  /// Compute the height of a grouped table with variable row heights.
+  double _measureTableGroup(List<_ShareMarkdownBlock> rows, double maxWidth) {
+    final cellList = rows.map((r) => _parseRowCells(r.text)).toList();
+    if (cellList.isEmpty || cellList.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
+    final colCount = cellList.map((c) => c.length).reduce(math.max);
+    final colWidths = _computeColWidths(cellList, colCount, maxWidth);
+    final rowHs = _computeRowHeights(cellList, colWidths, colCount);
+    return rowHs.fold(0.0, (a, b) => a + b) + 2;
+  }
+
+  /// Paint a grouped table with proper column alignment and auto-wrapping rows.
+  double _paintTableGroup(
+    Canvas canvas,
+    List<_ShareMarkdownBlock> rows,
+    Offset offset,
+    double maxWidth,
+  ) {
+    if (rows.isEmpty) return 0;
+    final cells = rows.map((r) => _parseRowCells(r.text)).toList();
+    if (cells.every((c) => c.length == 1 && c[0].isEmpty)) return 0;
+    final colCount = cells.map((c) => c.length).reduce(math.max);
+    final colWidths = _computeColWidths(cells, colCount, maxWidth);
+    final rowHeights = _computeRowHeights(cells, colWidths, colCount);
+    final totalWidth = colWidths.fold(0.0, (a, b) => a + b) +
+        (colCount - 1) * _tableBorderWidth;
+
+    var yOff = offset.dy;
+    for (var r = 0; r < rows.length; r++) {
+      final rowH = rowHeights[r];
+      final isHeader = r == 0;
+      final bg = isHeader
+          ? _tableHeaderBg
+          : r.isEven
+              ? _tableRowEvenBg
+              : _tableRowOddBg;
+      final rowRect = Rect.fromLTWH(
+        offset.dx, yOff, totalWidth, rowH,
+      );
+      canvas.drawRect(rowRect, Paint()..color = bg);
+
+      // Draw cell text with wrapping and vertical borders.
+      var x = offset.dx;
+      for (var c = 0; c < colCount; c++) {
+        final cellText = c < cells[r].length ? cells[r][c] : '';
+        final cellStyle = TextStyle(
+          fontSize: 13,
+          fontWeight: isHeader ? FontWeight.w800 : FontWeight.w500,
+          color: isHeader ? const Color(0xFF0F172A) : const Color(0xFF334155),
+        );
+        final cellW = math.max(colWidths[c] - 8, 4.0);
+        final p = _layoutText(cellText, cellStyle, maxWidth: cellW);
+        p.paint(canvas, Offset(x + 4, yOff + 4));
+
+        x += colWidths[c];
+        if (c < colCount - 1) {
+          canvas.drawLine(
+            Offset(x, yOff + 2), Offset(x, yOff + rowH - 2),
+            Paint()
+              ..color = _tableBorderColor.withValues(alpha: 0.5)
+              ..strokeWidth = _tableBorderWidth,
+          );
+          x += _tableBorderWidth;
+        }
+      }
+
+      // Row separator line.
+      canvas.drawLine(
+        Offset(offset.dx, yOff + rowH),
+        Offset(offset.dx + totalWidth, yOff + rowH),
+        Paint()
+          ..color = _tableBorderColor
+          ..strokeWidth = 0.5,
+      );
+
+      yOff += rowH;
+    }
+
+    return yOff - offset.dy + 2;
+  }
+
+  double _markdownBlockHeight(
     _ShareMarkdownBlock block,
     double maxWidth,
   ) {
+    if (block.type == _ShareMarkdownBlockType.image) {
+      return block.src != null ? 180.0 : _singleLineHeight;
+    }
     final style = _markdownTextStyle(block);
     final leftInset = _markdownLeftInset(block);
     final textWidth = math.max(20.0, maxWidth - leftInset);
     if (block.type == _ShareMarkdownBlockType.divider) return 18;
+    if (block.type == _ShareMarkdownBlockType.table) {
+      final p = _layoutText(_markdownDisplayText(block), _markdownTextStyle(block), maxWidth: maxWidth);
+      return p.height + 12;
+    }
     final painter = _layoutText(
       _markdownDisplayText(block),
       style,
@@ -1966,12 +2146,17 @@ class _ReviewShareImagePainter {
     return painter.height + _markdownBottomSpacing(block);
   }
 
-  static double _paintMarkdownBlock(
+  static const double _imageHeight = 160.0;
+  static const Color _imagePlaceholderColor = Color(0xFFE2E8F0);
+  static const Color _imagePlaceholderTextColor = Color(0xFF94A3B8);
+  static const double _singleLineHeight = 24.0;
+
+  double _paintMarkdownBlock(
     Canvas canvas,
     _ShareMarkdownBlock block,
     Offset offset,
     double maxWidth,
-  ) {
+    ) {
     if (block.type == _ShareMarkdownBlockType.divider) {
       canvas.drawLine(
         Offset(offset.dx, offset.dy + 8),
@@ -1981,6 +2166,48 @@ class _ReviewShareImagePainter {
           ..strokeWidth = 1,
       );
       return 18;
+    }
+
+    if (block.type == _ShareMarkdownBlockType.image) {
+      final src = block.src ?? '';
+      final loaded = src.isNotEmpty ? _loadedImages[src] : null;
+      const imageMaxHeight = 200.0;
+      if (loaded != null) {
+        final imgWidth = loaded.width.toDouble();
+        final imgHeight = loaded.height.toDouble();
+        final scale = (maxWidth / imgWidth).clamp(0.1, imageMaxHeight / imgHeight);
+        final pw = imgWidth * scale;
+        final ph = imgHeight * scale;
+        final rect = Rect.fromLTWH(offset.dx, offset.dy, pw, ph);
+        canvas.drawImageRect(
+          loaded,
+          Offset.zero & Size(imgWidth, imgHeight),
+          rect,
+          Paint()..filterQuality = FilterQuality.medium,
+        );
+        return ph + 8;
+      }
+      // Fallback: show alt text when image not loaded.
+      final label = block.text.isNotEmpty ? '[图片] ${block.text}' : '[图片]';
+      final labelStyle = TextStyle(
+        color: _imagePlaceholderTextColor,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      );
+      final labelPainter = _layoutText(label, labelStyle, maxWidth: maxWidth - 20);
+      final rect = Rect.fromLTWH(offset.dx, offset.dy, maxWidth, _imageHeight);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+        Paint()..color = _imagePlaceholderColor,
+      );
+      labelPainter.paint(
+        canvas,
+        Offset(
+          offset.dx + (maxWidth - labelPainter.width) / 2,
+          offset.dy + (_imageHeight - labelPainter.height) / 2,
+        ),
+      );
+      return _imageHeight + 8;
     }
 
     final leftInset = _markdownLeftInset(block);
@@ -2021,6 +2248,23 @@ class _ReviewShareImagePainter {
         Paint()..color = const Color(0xFF0F172A),
       );
       painter.paint(canvas, Offset(textOffset.dx + 12, textOffset.dy + 9));
+    } else if (block.type == _ShareMarkdownBlockType.table) {
+      // Table row with subtle background and bottom border.
+      final tableRect = Rect.fromLTWH(
+        offset.dx, offset.dy, maxWidth, painter.height + 10,
+      );
+      canvas.drawRect(
+        tableRect,
+        Paint()..color = const Color(0xFFF8FAFC),
+      );
+      canvas.drawLine(
+        Offset(offset.dx, offset.dy + painter.height + 10),
+        Offset(offset.dx + maxWidth, offset.dy + painter.height + 10),
+        Paint()
+          ..color = const Color(0xFFE2E8F0)
+          ..strokeWidth = 0.5,
+      );
+      painter.paint(canvas, Offset(textOffset.dx + 6, textOffset.dy + 5));
     } else {
       if (block.type == _ShareMarkdownBlockType.bullet) {
         canvas.drawCircle(
@@ -2035,7 +2279,7 @@ class _ReviewShareImagePainter {
     return _markdownBlockHeight(block, maxWidth);
   }
 
-  static double _markdownLeftInset(_ShareMarkdownBlock block) {
+  double _markdownLeftInset(_ShareMarkdownBlock block) {
     return switch (block.type) {
       _ShareMarkdownBlockType.bullet => 18,
       _ShareMarkdownBlockType.quote => 16,
@@ -2044,7 +2288,7 @@ class _ReviewShareImagePainter {
     };
   }
 
-  static double _markdownBottomSpacing(_ShareMarkdownBlock block) {
+  double _markdownBottomSpacing(_ShareMarkdownBlock block) {
     return switch (block.type) {
       _ShareMarkdownBlockType.heading => 10,
       _ShareMarkdownBlockType.bullet => 4,
@@ -2052,10 +2296,12 @@ class _ReviewShareImagePainter {
       _ShareMarkdownBlockType.code => 16,
       _ShareMarkdownBlockType.paragraph => 10,
       _ShareMarkdownBlockType.divider => 0,
+      _ShareMarkdownBlockType.image => 8,
+      _ShareMarkdownBlockType.table => 0,
     };
   }
 
-  static TextStyle _markdownTextStyle(_ShareMarkdownBlock block) {
+  TextStyle _markdownTextStyle(_ShareMarkdownBlock block) {
     return switch (block.type) {
       _ShareMarkdownBlockType.heading => const TextStyle(
         color: Color(0xFF0F172A),
@@ -2091,11 +2337,11 @@ class _ReviewShareImagePainter {
     };
   }
 
-  static String _markdownDisplayText(_ShareMarkdownBlock block) {
+  String _markdownDisplayText(_ShareMarkdownBlock block) {
     return block.text.trim();
   }
 
-  static double _paintPillWrap(
+  double _paintPillWrap(
     Canvas canvas,
     List<_ShareImagePill> pills,
     Offset offset, {
@@ -2127,7 +2373,7 @@ class _ReviewShareImagePainter {
     return y + 31;
   }
 
-  static void _paintPill(
+  void _paintPill(
     Canvas canvas,
     String text,
     Offset offset, {
@@ -2149,7 +2395,7 @@ class _ReviewShareImagePainter {
     painter.paint(canvas, Offset(offset.dx + 13, offset.dy + 7));
   }
 
-  static void _paintText(
+  void _paintText(
     Canvas canvas,
     String text,
     TextStyle style,
@@ -2168,7 +2414,7 @@ class _ReviewShareImagePainter {
     painter.paint(canvas, offset);
   }
 
-  static Size _measureText(
+  Size _measureText(
     String text,
     TextStyle style, {
     required double maxWidth,
@@ -2183,7 +2429,7 @@ class _ReviewShareImagePainter {
     return painter.size;
   }
 
-  static TextPainter _layoutText(
+  TextPainter _layoutText(
     String text,
     TextStyle style, {
     required double maxWidth,
@@ -2220,13 +2466,20 @@ enum _ShareMarkdownBlockType {
   quote,
   code,
   divider,
+  image,
+  table,
 }
 
 class _ShareMarkdownBlock {
-  const _ShareMarkdownBlock({required this.type, required this.text});
+  const _ShareMarkdownBlock({
+    required this.type,
+    required this.text,
+    this.src,
+  });
 
   final _ShareMarkdownBlockType type;
   final String text;
+  final String? src;
 }
 
 List<_ShareMarkdownBlock> _parseShareMarkdown(String source) {
@@ -2256,6 +2509,19 @@ List<_ShareMarkdownBlock> _parseShareMarkdown(String source) {
 }
 
 Iterable<_ShareMarkdownBlock> _shareMarkdownBlocksFromNode(md.Node node) {
+  // Handle standalone img element (e.g. <img src="..." alt="..."/>).
+  if (node is md.Element && node.tag == 'img') {
+    final src = node.attributes['src'] ?? '';
+    final alt = node.attributes['alt'] ?? '';
+    return [
+      _ShareMarkdownBlock(
+        type: _ShareMarkdownBlockType.image,
+        text: alt,
+        src: src.isNotEmpty ? src : null,
+      ),
+    ];
+  }
+
   if (node is! md.Element) {
     final text = _shareMarkdownText(node).trim();
     return text.isEmpty
@@ -2277,6 +2543,22 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownBlocksFromNode(md.Node node) {
     case 'h6':
       return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.heading);
     case 'p':
+      // Check if paragraph contains a single img node.
+      final children = node.children;
+      if (children != null && children.length == 1) {
+        final only = children.single;
+        if (only is md.Element && only.tag == 'img') {
+          final src = only.attributes['src'] ?? '';
+          final alt = only.attributes['alt'] ?? '';
+          return [
+            _ShareMarkdownBlock(
+              type: _ShareMarkdownBlockType.image,
+              text: alt,
+              src: src.isNotEmpty ? src : null,
+            ),
+          ];
+        }
+      }
       return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.paragraph);
     case 'blockquote':
       return _singleShareMarkdownBlock(node, _ShareMarkdownBlockType.quote);
@@ -2292,8 +2574,8 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownBlocksFromNode(md.Node node) {
     case 'table':
       return _shareMarkdownTableBlocks(node);
     default:
-      final children = node.children;
-      if (children == null || children.isEmpty) {
+      final childList = node.children;
+      if (childList == null || childList.isEmpty) {
         final text = _shareMarkdownText(node).trim();
         return text.isEmpty
             ? const []
@@ -2304,7 +2586,7 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownBlocksFromNode(md.Node node) {
                 ),
               ];
       }
-      return children.expand(_shareMarkdownBlocksFromNode);
+      return childList.expand(_shareMarkdownBlocksFromNode);
   }
 }
 
@@ -2334,7 +2616,7 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownListBlocks(md.Element list) {
 }
 
 Iterable<_ShareMarkdownBlock> _shareMarkdownTableBlocks(md.Element table) {
-  final rows = <String>[];
+  final rows = <List<String>>[];
   void collectRows(md.Node node) {
     if (node is! md.Element) return;
     if (node.tag == 'tr') {
@@ -2342,8 +2624,7 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownTableBlocks(md.Element table) {
           .whereType<md.Element>()
           .where((cell) => cell.tag == 'th' || cell.tag == 'td')
           .map((cell) => _shareMarkdownText(cell).trim())
-          .where((text) => text.isNotEmpty)
-          .join(' / ');
+          .toList(growable: false);
       if (cells.isNotEmpty) rows.add(cells);
       return;
     }
@@ -2353,10 +2634,12 @@ Iterable<_ShareMarkdownBlock> _shareMarkdownTableBlocks(md.Element table) {
   }
 
   collectRows(table);
-  return rows.map(
-    (row) =>
-        _ShareMarkdownBlock(type: _ShareMarkdownBlockType.paragraph, text: row),
-  );
+  if (rows.isEmpty) return const [];
+  return rows.asMap().entries.map((entry) {
+    final cells = entry.value;
+    final line = cells.join(' │ ');
+    return _ShareMarkdownBlock(type: _ShareMarkdownBlockType.table, text: line);
+  });
 }
 
 String _shareMarkdownText(md.Node node) {
@@ -2366,6 +2649,24 @@ String _shareMarkdownText(md.Node node) {
   if (node.tag == 'img') return node.attributes['alt'] ?? '';
   final children = node.children;
   if (children == null || children.isEmpty) return node.textContent;
+
+  // Strip formatting for bold/italic/strikethrough — the Canvas painter
+  // cannot render rich text, so markers would appear literally.
+  if (node.tag == 'strong' || node.tag == 'b' ||
+      node.tag == 'em' || node.tag == 'i' ||
+      node.tag == 'del' || node.tag == 's') {
+    return children.map(_shareMarkdownText).join();
+  }
+  // Keep backticks for inline code so it stands out visually.
+  if (node.tag == 'code') {
+    final inner = children.map(_shareMarkdownText).join();
+    return '`$inner`';
+  }
+  if (node.tag == 'a') {
+    final inner = children.map(_shareMarkdownText).join().trim();
+    return inner;
+  }
+
   final buffer = StringBuffer();
   for (final child in children) {
     final text = _shareMarkdownText(child);
@@ -2561,10 +2862,33 @@ Future<Uint8List> renderReviewShareImage(
   double pixelRatio = 2.5,
 }) async {
   final avatar = await _loadShareAvatarImage(review);
+
+  // Pre-load any images found in the review comment.
+  final imageUrls = <String>{};
+  final imgRegExp = RegExp(r'!\[.*?\]\((.*?)\)|<img[^>]+src="([^"]+)"');
+  for (final match in imgRegExp.allMatches(review.comment)) {
+    final url = (match.group(1) ?? match.group(2) ?? '').trim();
+    if (url.isNotEmpty) imageUrls.add(url);
+  }
+  final loadedResults = await Future.wait(
+    imageUrls.map((url) async {
+      try {
+        final image = await _loadShareImage(url);
+        return MapEntry(url, image);
+      } catch (_) {
+        return MapEntry(url, null);
+      }
+    }),
+  );
+  final loadedImages = <String, ui.Image?>{
+    for (final entry in loadedResults) entry.key: entry.value,
+  };
+
   final painter = _ReviewShareImagePainter(
     course: course,
     review: review,
     avatar: avatar,
+    loadedImages: loadedImages,
   );
   final recorder = ui.PictureRecorder();
   final logicalSize = painter.measure();
