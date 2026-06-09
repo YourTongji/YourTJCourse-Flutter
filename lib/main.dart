@@ -10,8 +10,6 @@ import 'features/catalog/catalog_view.dart';
 import 'features/announcements/announcement_controller.dart';
 import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
-import 'features/maintenance/maintenance_provider.dart';
-import 'features/maintenance/maintenance_view.dart';
 import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
@@ -174,9 +172,8 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AnnouncementGate(
-      child: _MaintenanceGate(
-        child: AutoUpdateGate(
-          child: _SplashGate(
+      child: AutoUpdateGate(
+        child: _SplashGate(
           child: Scaffold(
             body: navigationShell,
             bottomNavigationBar: _AppNavigationBar(
@@ -191,7 +188,6 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -473,27 +469,6 @@ class _AnnouncementGateState extends ConsumerState<_AnnouncementGate> {
           ],
         );
       },
-    );
-  }
-}
-
-/// Shows a full-screen maintenance overlay when the backend is in maintenance mode.
-///
-/// Watches [maintenanceStateProvider] and swaps the child widget for
-/// [MaintenanceView] when `maintenance.enabled` is true.
-class _MaintenanceGate extends ConsumerWidget {
-  const _MaintenanceGate({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final maintenance = ref.watch(maintenanceStateProvider);
-
-    return maintenance.when(
-      data: (state) => state.enabled ? const MaintenanceView() : child,
-      loading: () => child, // show app content while initial fetch runs
-      error: (_, _) => child, // fall through on fetch failure
     );
   }
 }
