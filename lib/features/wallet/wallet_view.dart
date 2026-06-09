@@ -16,7 +16,16 @@ class WalletView extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('钱包')),
       body: wallet.when(
-        loading: () => const LoadingState(message: '正在加载钱包'),
+        loading: () => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: const [
+            _WalletCardSkeleton(),
+            SizedBox(height: 20),
+            _ActivitySkeleton(),
+            SizedBox(height: 16),
+            _InfoSkeleton(),
+          ],
+        ),
         error: (error, _) =>
             ErrorState(message: error.toString(), onRetry: () => ref.invalidate(walletProvider)),
         data: (data) {
@@ -28,7 +37,7 @@ class WalletView extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('钱包初始化失败，请重试', textAlign: TextAlign.center),
+                    const Text('钱包初始化失败', textAlign: TextAlign.center),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: () => ref.invalidate(walletProvider),
@@ -40,11 +49,12 @@ class WalletView extends ConsumerWidget {
               ),
             );
           }
-          final today = data.today;
+          final summary = data.summary;
+          final today = summary?.today;
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Gradient wallet card with circular logo
+              // Wallet card
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -58,17 +68,11 @@ class WalletView extends ConsumerWidget {
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
-                      // Circular logo
                       ClipOval(
-                        child: Image.asset(
-                          'assets/images/app_logo.png',
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.asset('assets/images/app_logo.png',
+                            width: 60, height: 60, fit: BoxFit.cover),
                       ),
                       const SizedBox(width: 16),
-                      // Balance info
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,14 +85,6 @@ class WalletView extends ConsumerWidget {
                                 style: theme.textTheme.displaySmall?.copyWith(
                                     fontWeight: FontWeight.w900,
                                     color: scheme.onPrimaryContainer)),
-                            if (data.totalEarned != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text('累计获得 ${data.totalEarned} 积分',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                        color: scheme.onPrimaryContainer
-                                            .withValues(alpha: 0.7))),
-                              ),
                           ],
                         ),
                       ),
@@ -148,12 +144,107 @@ class WalletView extends ConsumerWidget {
   }
 }
 
+// ─── Skeleton widgets ────────────────────────────────────────────────
+
+class _WalletCardSkeleton extends StatelessWidget {
+  const _WalletCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: base, borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Container(width: 60, height: 60, decoration: BoxDecoration(
+              color: base, borderRadius: BorderRadius.circular(30),
+            )),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(width: 60, height: 12, color: base),
+                  const SizedBox(height: 8),
+                  Container(width: 120, height: 28, color: base),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySkeleton extends StatelessWidget {
+  const _ActivitySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(width: 80, height: 18, color: base),
+        const SizedBox(height: 12),
+        for (var i = 0; i < 2; i++) ...[
+          Row(children: [
+            Container(width: 18, height: 18, color: base),
+            const SizedBox(width: 8),
+            Expanded(child: Container(height: 16, color: base)),
+            const SizedBox(width: 8),
+            Container(width: 40, height: 16, color: base),
+          ]),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _InfoSkeleton extends StatelessWidget {
+  const _InfoSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: base, borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(width: 100, height: 16, color: base),
+            const SizedBox(height: 12),
+            for (var i = 0; i < 3; i++) ...[
+              Row(children: [
+                Container(width: 16, height: 16, color: base),
+                const SizedBox(width: 6),
+                Container(width: 180, height: 14, color: base),
+              ]),
+              const SizedBox(height: 6),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Supporting widgets ──────────────────────────────────────────────
+
 class _ActivityRow extends StatelessWidget {
   const _ActivityRow({required this.icon, required this.label, required this.value});
-
-  final IconData icon;
-  final String label;
-  final int value;
+  final IconData icon; final String label; final int value;
 
   @override
   Widget build(BuildContext context) {
@@ -165,10 +256,7 @@ class _ActivityRow extends StatelessWidget {
           Icon(icon, size: 18, color: scheme.primary),
           const SizedBox(width: 8),
           Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyMedium)),
-          Text('+$value', style: TextStyle(
-            fontWeight: FontWeight.w800,
-            color: scheme.primary,
-          )),
+          Text('+$value', style: TextStyle(fontWeight: FontWeight.w800, color: scheme.primary)),
         ],
       ),
     );
@@ -177,9 +265,7 @@ class _ActivityRow extends StatelessWidget {
 
 class _BenefitRow extends StatelessWidget {
   const _BenefitRow({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
+  final IconData icon; final String text;
 
   @override
   Widget build(BuildContext context) {

@@ -37,7 +37,9 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
       appBar: AppBar(
         title: const Text('课程'),
         actions: [
-          catalog.maybeWhen(
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: catalog.maybeWhen(
             data: (state) => Badge(
               isLabelVisible: state.activeFilterCount > 0,
               label: Text('${state.activeFilterCount}'),
@@ -53,7 +55,8 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
               icon: const Icon(Icons.tune),
             ),
           ),
-        ],
+        ),
+      ],
       ),
       body: RefreshIndicator(
         onRefresh: controller.refresh,

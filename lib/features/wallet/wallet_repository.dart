@@ -18,33 +18,40 @@ class WalletRepository {
   final Dio _creditDio;
   final ApiClient _mainClient;
 
-  /// Register a new wallet with the given credentials.
+  /// Register wallet with the credit server.
   Future<CreditWallet> registerWallet(WalletCredentials creds, {CancelToken? cancelToken}) async {
-    final response = await _creditDio.post<Object?>(
+    final r = await _creditDio.post<Object?>(
       '/api/wallet/register',
-      data: {
-        'user_hash': creds.userHash,
-        'user_secret': creds.userSecret,
-      },
+      data: {'user_hash': creds.userHash, 'user_secret': creds.userSecret},
       cancelToken: cancelToken,
     );
-    return CreditWallet.fromApiResponse(response.data);
+    return CreditWallet.fromApiResponse(r.data);
   }
 
-  /// Get wallet balance and summary for the given user hash.
-  Future<CreditWallet> getWallet({
-    required String userHash,
-    CancelToken? cancelToken,
-  }) async {
-    final response = await _creditDio.get<Object?>(
+  /// Fetch basic wallet info from the credit server.
+  Future<CreditWallet> fetchWallet(String userHash, {CancelToken? cancelToken}) async {
+    final r = await _creditDio.get<Object?>(
       '/api/wallet/$userHash',
       cancelToken: cancelToken,
     );
-    return CreditWallet.fromApiResponse(response.data);
+    return CreditWallet.fromApiResponse(r.data);
   }
 
-  /// Set edit token for a review (triggers credit reward).
-  /// This endpoint is on the main API server, not the credit server.
+  /// Fetch extended summary (balance + today's activity) from jcourse integration.
+  Future<WalletSummary?> fetchSummary(String userHash, {CancelToken? cancelToken}) async {
+    try {
+      final r = await _creditDio.get<Object?>(
+        '/api/integration/jcourse',
+        queryParameters: {'action': 'summary', 'userHash': userHash},
+        cancelToken: cancelToken,
+      );
+      return WalletSummary.fromApiResponse(r.data);
+    } catch (_) {
+      return null; // summary is optional — wallet works without it
+    }
+  }
+
+  /// Set edit token on the main API server.
   Future<void> setEditToken({
     required int reviewId,
     required String editToken,
@@ -53,10 +60,7 @@ class WalletRepository {
   }) {
     return _mainClient.patch(
       '/api/review/$reviewId/edit-token',
-      body: {
-        'edit_token': editToken,
-        'wallet_user_hash': walletUserHash,
-      },
+      body: {'edit_token': editToken, 'wallet_user_hash': walletUserHash},
       cancelToken: cancelToken,
       decode: (_) {},
     );
