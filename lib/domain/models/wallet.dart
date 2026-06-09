@@ -67,10 +67,10 @@ class CreditWallet {
   factory CreditWallet.fromJson(Object? json) {
     final map = asJsonMap(json);
     return CreditWallet(
-      userHash: readString(map['user_hash']) ?? '',
+      userHash: readString(map['userHash']) ?? readString(map['user_hash']) ?? '',
       balance: readInt(map['balance']) ?? 0,
-      totalEarned: readInt(map['total_earned']),
-      totalSpent: readInt(map['total_spent']),
+      totalEarned: readInt(map['totalEarned']) ?? readInt(map['total_earned']),
+      totalSpent: readInt(map['totalSpent']) ?? readInt(map['total_spent']),
       today: map['today'] != null
           ? WalletTodaySummary.fromJson(map['today'])
           : null,
