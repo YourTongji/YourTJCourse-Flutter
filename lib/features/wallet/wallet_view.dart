@@ -144,6 +144,89 @@ class WalletView extends ConsumerWidget {
   }
 }
 
+// ─── Shimmer animation ───────────────────────────────────────────────
+
+class _ShimmerBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 4.0,
+  });
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Alignment> _shimmerAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _shimmerAnim = Tween<Alignment>(
+      // Sweeps the highlight band from left edge (-1.0) to right edge (+1.0)
+      // in Alignment coordinates across the widget width.
+      begin: const Alignment(-2.5, 0.0),
+      end: const Alignment(-0.5, 0.0),
+    ).animate(_controller);
+    _controller.repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            final al = _shimmerAnim.value;
+            return LinearGradient(
+              begin: al,
+              end: Alignment(al.x + 3.0, 0.0),
+              colors: const [
+                Color(0x00000000), // transparent
+                Color(0x00000000), // transparent
+                Color(0x33FFFFFF), // shimmer highlight (20% white)
+                Color(0x00000000), // transparent
+                Color(0x00000000), // transparent
+              ],
+              stops: [0.0, 0.4, 0.5, 0.6, 1.0],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.srcOver,
+          child: Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: base,
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ─── Skeleton widgets ────────────────────────────────────────────────
 
 class _WalletCardSkeleton extends StatelessWidget {
@@ -151,8 +234,7 @@ class _WalletCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    final base = Theme.of(context).colorScheme.surfaceContainerHighest;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: base, borderRadius: BorderRadius.circular(20),
@@ -161,17 +243,17 @@ class _WalletCardSkeleton extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            Container(width: 60, height: 60, decoration: BoxDecoration(
-              color: base, borderRadius: BorderRadius.circular(30),
-            )),
+            ClipOval(
+              child: _ShimmerBox(width: 60, height: 60, borderRadius: 30),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(width: 60, height: 12, color: base),
+                  _ShimmerBox(width: 60, height: 12),
                   const SizedBox(height: 8),
-                  Container(width: 120, height: 28, color: base),
+                  _ShimmerBox(width: 120, height: 28),
                 ],
               ),
             ),
@@ -187,19 +269,18 @@ class _ActivitySkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(width: 80, height: 18, color: base),
+        _ShimmerBox(width: 80, height: 18),
         const SizedBox(height: 12),
         for (var i = 0; i < 2; i++) ...[
           Row(children: [
-            Container(width: 18, height: 18, color: base),
+            _ShimmerBox(width: 18, height: 18),
             const SizedBox(width: 8),
-            Expanded(child: Container(height: 16, color: base)),
+            Expanded(child: _ShimmerBox(width: double.infinity, height: 16)),
             const SizedBox(width: 8),
-            Container(width: 40, height: 16, color: base),
+            _ShimmerBox(width: 40, height: 16),
           ]),
           const SizedBox(height: 8),
         ],
@@ -213,7 +294,7 @@ class _InfoSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    final base = Theme.of(context).colorScheme.surfaceContainerHighest;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: base, borderRadius: BorderRadius.circular(14),
@@ -223,13 +304,13 @@ class _InfoSkeleton extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(width: 100, height: 16, color: base),
+            _ShimmerBox(width: 100, height: 16),
             const SizedBox(height: 12),
             for (var i = 0; i < 3; i++) ...[
               Row(children: [
-                Container(width: 16, height: 16, color: base),
+                _ShimmerBox(width: 16, height: 16),
                 const SizedBox(width: 6),
-                Container(width: 180, height: 14, color: base),
+                _ShimmerBox(width: 180, height: 14),
               ]),
               const SizedBox(height: 6),
             ],

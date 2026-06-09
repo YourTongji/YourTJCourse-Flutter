@@ -22,7 +22,7 @@ class WalletRepository {
   Future<CreditWallet> registerWallet(WalletCredentials creds, {CancelToken? cancelToken}) async {
     final r = await _creditDio.post<Object?>(
       '/api/wallet/register',
-      data: {'user_hash': creds.userHash, 'user_secret': creds.userSecret},
+      data: {'userHash': creds.userHash, 'userSecret': creds.userSecret},
       cancelToken: cancelToken,
     );
     return CreditWallet.fromApiResponse(r.data);
@@ -41,8 +41,8 @@ class WalletRepository {
   Future<WalletSummary?> fetchSummary(String userHash, {CancelToken? cancelToken}) async {
     try {
       final r = await _creditDio.get<Object?>(
-        '/api/integration/jcourse',
-        queryParameters: {'action': 'summary', 'userHash': userHash},
+        '/api/integration/jcourse/summary',
+        queryParameters: {'userHash': userHash},
         cancelToken: cancelToken,
       );
       return WalletSummary.fromApiResponse(r.data);
@@ -62,6 +62,7 @@ class WalletRepository {
       '/api/review/$reviewId/edit-token',
       body: {'edit_token': editToken, 'wallet_user_hash': walletUserHash},
       cancelToken: cancelToken,
+      // decode callback intentionally ignores the response body.
       decode: (_) {},
     );
   }

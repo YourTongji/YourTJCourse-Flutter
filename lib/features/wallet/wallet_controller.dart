@@ -37,9 +37,17 @@ class WalletController extends AsyncNotifier<WalletState> {
     _repository = ref.watch(walletRepositoryProvider);
     final cancelToken = scopedCancelToken(ref);
 
+    final savedMnemonic = await _secureStorage.read(key: _mnemonicKey);
     final savedHash = await _secureStorage.read(key: _hashKey);
+    final savedSecret = await _secureStorage.read(key: _secretKey);
 
-    if (savedHash == null || savedHash.isEmpty) {
+    if (savedHash == null || savedHash.isEmpty ||
+        savedSecret == null || savedSecret.isEmpty ||
+        savedMnemonic == null || savedMnemonic.isEmpty) {
+      // Clean up any partial/incomplete stored data.
+      await _secureStorage.delete(key: _mnemonicKey);
+      await _secureStorage.delete(key: _hashKey);
+      await _secureStorage.delete(key: _secretKey);
       // First launch — generate credentials and register.
       final creds = WalletCredentials.generate();
       final wallet = await _repository.registerWallet(creds, cancelToken: cancelToken);
@@ -50,6 +58,8 @@ class WalletController extends AsyncNotifier<WalletState> {
     }
 
     // Fetch wallet, then summary in the background.
+    // Dart promotes savedHash/savedSecret/savedMnemonic to non-null
+    // because the if-block above checks and early-returns for null/empty.
     final wallet = await _repository.fetchWallet(savedHash, cancelToken: cancelToken);
     final summary = await _repository.fetchSummary(savedHash, cancelToken: cancelToken);
     return WalletState(userHash: wallet.userHash, balance: wallet.balance, summary: summary);
@@ -60,7 +70,11 @@ class WalletController extends AsyncNotifier<WalletState> {
     final mnemonic = await _secureStorage.read(key: _mnemonicKey);
     final hash = await _secureStorage.read(key: _hashKey);
     final secret = await _secureStorage.read(key: _secretKey);
-    if (hash == null || secret == null) return null;
-    return WalletCredentials(mnemonic: mnemonic ?? '', userHash: hash, userSecret: secret);
+    if ((mnemonic == null || mnemonic.isEmpty) ||
+        (hash == null || hash.isEmpty) ||
+        (secret == null || secret.isEmpty)) {
+      return null;
+    }
+    return WalletCredentials(mnemonic: mnemonic, userHash: hash, userSecret: secret);
   }
 }
