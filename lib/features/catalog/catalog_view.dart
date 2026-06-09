@@ -72,20 +72,43 @@ class _CatalogViewState extends ConsumerState<CatalogView> {
                       hintText: '搜索课程、教师或课程号',
                       leading: const Icon(Icons.search),
                       trailing: [
-                        IconButton(
-                          tooltip: '高级筛选',
-                          onPressed: () => _showFilterSheet(context, ref),
-                          icon: Icon(
-                            catalog.maybeWhen(
-                              data: (s) => s.hasAdvancedFilters,
-                              orElse: () => false,
-                            )
-                                ? Icons.filter_alt
-                                : Icons.filter_alt_outlined,
+                        catalog.maybeWhen(
+                          data: (s) => s.isSearching
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: '高级筛选',
+                                  onPressed: () =>
+                                      _showFilterSheet(context, ref),
+                                  icon: Icon(
+                                    s.hasAdvancedFilters
+                                        ? Icons.filter_alt
+                                        : Icons.filter_alt_outlined,
+                                  ),
+                                ),
+                          orElse: () => IconButton(
+                            tooltip: '高级筛选',
+                            onPressed: () => _showFilterSheet(context, ref),
+                            icon: const Icon(Icons.filter_alt_outlined),
                           ),
                         ),
                       ],
                       onChanged: controller.setSearchText,
+                    ),
+                    // Linear progress bar during search.
+                    catalog.maybeWhen(
+                      data: (s) => s.isSearching
+                          ? const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: LinearProgressIndicator(minHeight: 2),
+                            )
+                          : const SizedBox.shrink(),
+                      orElse: () => const SizedBox.shrink(),
                     ),
                     catalog.maybeWhen(
                       data: (state) => state.hasAdvancedFilters
