@@ -5,13 +5,30 @@ import 'package:crypto/crypto.dart';
 
 import 'json_helpers.dart';
 
+/// Error thrown when the credit API returns a non-success response.
+class CreditApiException implements Exception {
+  const CreditApiException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 /// Unwraps the credit API envelope: { success: bool, data: T, error: string }.
-T? _unwrapCreditResponse<T>(Object? json, T Function(Object?) fromJson) {
-  if (json is! Map) return null;
+/// Throws [CreditApiException] when the API returns an error.
+T _unwrapCreditResponse<T>(Object? json, T Function(Object?) fromJson) {
+  if (json is! Map) throw const CreditApiException('响应格式错误');
   final success = json['success'] == true;
-  if (!success) return null;
+  if (!success) {
+    final error = json['error'] is String
+        ? json['error'] as String
+        : json['message'] is String
+            ? json['message'] as String
+            : '未知错误';
+    throw CreditApiException(error);
+  }
   final data = json['data'];
-  return data != null ? fromJson(data) : null;
+  if (data == null) throw const CreditApiException('响应数据为空');
+  return fromJson(data);
 }
 
 /// Wallet credentials — generated client-side from a random seed.
@@ -78,7 +95,8 @@ class CreditWallet {
   }
 
   /// Parse from the credit API response envelope.
-  static CreditWallet? fromApiResponse(Object? json) {
+  /// Throws [CreditApiException] on error.
+  static CreditWallet fromApiResponse(Object? json) {
     return _unwrapCreditResponse(json, CreditWallet.fromJson);
   }
 

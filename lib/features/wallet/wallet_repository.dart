@@ -28,8 +28,7 @@ class WalletRepository {
       },
       cancelToken: cancelToken,
     );
-    return CreditWallet.fromApiResponse(response.data) ??
-        CreditWallet(userHash: creds.userHash, balance: 0);
+    return CreditWallet.fromApiResponse(response.data);
   }
 
   /// Get wallet balance and summary for the given user hash.
@@ -41,8 +40,7 @@ class WalletRepository {
       '/api/wallet/$userHash',
       cancelToken: cancelToken,
     );
-    return CreditWallet.fromApiResponse(response.data) ??
-        CreditWallet(userHash: userHash, balance: 0);
+    return CreditWallet.fromApiResponse(response.data);
   }
 
   /// Set edit token for a review (triggers credit reward).
