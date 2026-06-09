@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_credit_card/flutter_credit_card.dart';
 
 import '../../shared/widgets/app_states.dart';
 import 'wallet_controller.dart';
@@ -34,32 +33,57 @@ class WalletView extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Credit-card-style wallet card with app logo.
-              CreditCardWidget(
-                cardNumber: '${data.balance} 积分',
-                expiryDate: '今日 +${data.totalEarned ?? 0}',
-                cardHolderName: 'YourTJ Wallet',
-                cvvCode: data.userHash.length > 6
-                    ? data.userHash.substring(0, 6).toUpperCase()
-                    : data.userHash,
-                showBackView: false,
-                obscureCardNumber: false,
-                obscureCardCvv: false,
-                isHolderNameVisible: true,
-                isChipVisible: false,
-                isSwipeGestureEnabled: false,
-                cardBgColor: scheme.primaryContainer.withValues(alpha: 0.4),
-                backgroundImage: 'assets/images/app_logo.png',
-                frontCardBorder: Border.all(
-                  color: scheme.primary.withValues(alpha: 0.2),
-                  width: 1,
+              // Gradient wallet card with circular logo
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [scheme.primaryContainer, scheme.primary.withValues(alpha: 0.3)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                textStyle: TextStyle(
-                  color: scheme.onPrimaryContainer,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      // Circular logo
+                      ClipOval(
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Balance info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('积分余额',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                    color: scheme.onPrimaryContainer)),
+                            const SizedBox(height: 4),
+                            Text('${data.balance}',
+                                style: theme.textTheme.displaySmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: scheme.onPrimaryContainer)),
+                            if (data.totalEarned != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text('累计获得 ${data.totalEarned} 积分',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        color: scheme.onPrimaryContainer
+                                            .withValues(alpha: 0.7))),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                onCreditCardWidgetChange: (_) {},
               ),
               const SizedBox(height: 20),
 
