@@ -141,6 +141,7 @@ class CourseDetailView extends ConsumerWidget {
                         onFavorite: () => controller.toggleFavorite(review.id),
                         onReport: () =>
                             _showReportSheet(context, controller, review.id),
+                        onEdit: () => _editReview(context, ref, controller, review),
                       );
                     },
                   ),
@@ -213,6 +214,25 @@ class CourseDetailView extends ConsumerWidget {
     );
   }
 
+  void _editReview(
+    BuildContext context,
+    WidgetRef ref,
+    CourseDetailController controller,
+    Review review,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => _ReviewComposeSheet(
+        course: controller.currentDetail,
+        controller: controller,
+        captchaRepository: ref.read(captchaRepositoryProvider),
+        editReview: review,
+      ),
+    );
+  }
+
   void _showReviewSheet(
     BuildContext context,
     WidgetRef ref,
@@ -236,11 +256,13 @@ class _ReviewComposeSheet extends StatefulWidget {
     required this.course,
     required this.controller,
     required this.captchaRepository,
+    this.editReview,
   });
 
   final CourseDetail course;
   final CourseDetailController controller;
   final CaptchaRepository captchaRepository;
+  final Review? editReview;
 
   @override
   State<_ReviewComposeSheet> createState() => _ReviewComposeSheetState();
@@ -259,7 +281,14 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
   @override
   void initState() {
     super.initState();
-    _semester = _semesterOptions.first;
+    final edit = widget.editReview;
+    if (edit != null) {
+      _commentController.text = edit.comment;
+      _rating = edit.rating;
+      _semester = edit.semester.isNotEmpty ? edit.semester : _semesterOptions.first;
+    } else {
+      _semester = _semesterOptions.first;
+    }
   }
 
   @override
@@ -456,14 +485,25 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
     setState(() => _isSubmitting = true);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await widget.controller.createReview(
-      rating: _rating,
-      comment: _commentController.text.trim(),
-      semester: _semester,
-      captchaToken: captchaToken,
-      reviewerName: _showReviewer ? _nameController.text.trim() : null,
-      reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
-    );
+    final edit = widget.editReview;
+    final ok = edit != null
+        ? await widget.controller.updateReview(
+            reviewId: edit.id,
+            rating: _rating,
+            comment: _commentController.text.trim(),
+            semester: _semester,
+            captchaToken: captchaToken,
+            reviewerName: _showReviewer ? _nameController.text.trim() : null,
+            reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
+          )
+        : await widget.controller.createReview(
+            rating: _rating,
+            comment: _commentController.text.trim(),
+            semester: _semester,
+            captchaToken: captchaToken,
+            reviewerName: _showReviewer ? _nameController.text.trim() : null,
+            reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
+          );
     if (!mounted) return;
     setState(() => _isSubmitting = false);
     if (ok) {
@@ -1164,6 +1204,7 @@ class ReviewCard extends StatelessWidget {
     required this.onHide,
     required this.onFavorite,
     required this.onReport,
+    this.onEdit,
   });
 
   final CourseDetail course;
@@ -1173,6 +1214,7 @@ class ReviewCard extends StatelessWidget {
   final VoidCallback onHide;
   final VoidCallback onFavorite;
   final VoidCallback onReport;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1212,11 +1254,14 @@ class ReviewCard extends StatelessWidget {
                         review: review,
                       );
                     }
+                    if (value == 'edit') onEdit?.call();
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'share', child: Text('生成分享图')),
-                    PopupMenuItem(value: 'hide', child: Text('隐藏')),
-                    PopupMenuItem(value: 'report', child: Text('举报')),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'share', child: Text('生成分享图')),
+                    const PopupMenuItem(value: 'hide', child: Text('隐藏')),
+                    const PopupMenuItem(value: 'report', child: Text('举报')),
+                    if (onEdit != null)
+                      const PopupMenuItem(value: 'edit', child: Text('编辑')),
                   ],
                 ),
               ],

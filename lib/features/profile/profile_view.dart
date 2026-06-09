@@ -92,10 +92,22 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                '钱包、积分与身份能力开发中',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              InkWell(
+                                onTap: () => context.push('/wallet'),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.account_balance_wallet_outlined,
+                                        size: 16, color: theme.colorScheme.primary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '查看钱包与积分',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/cancel_token_scope.dart';
+import '../../core/network/hmac_helper.dart';
 import '../../core/storage/client_id_store.dart';
+import '../wallet/wallet_controller.dart';
+import '../wallet/wallet_repository.dart';
 import '../../domain/models/ai_summary.dart';
 import '../../domain/models/course.dart';
 import '../../domain/models/course_detail.dart';
@@ -329,6 +332,8 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
       );
       if (!response.success) return false;
       if (response.reviewId != null) {
+        // Fire-and-forget: set edit token to claim credit reward.
+        unawaited(_claimCreditReward(response.reviewId!));
         final current = state.value;
         if (current != null) {
           final review = Review(
@@ -347,6 +352,62 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
           await _localReviewStore.upsertMine(_entryFor(current, review));
         }
       }
+      ref.invalidateSelf();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Claim credit reward by setting the edit token after review creation.
+  Future<void> _claimCreditReward(int reviewId) async {
+    final creds = await ref.read(walletProvider.notifier).loadCredentials();
+    if (creds == null) return;
+    final token = HmacHelper.editToken(
+      reviewId: reviewId,
+      userSecret: creds.userSecret,
+    );
+    try {
+      await ref.read(walletRepositoryProvider).setEditToken(
+        reviewId: reviewId,
+        editToken: token,
+        walletUserHash: creds.userHash,
+      );
+    } catch (_) {
+      // Silently skip — reward can be claimed later via edit.
+    }
+  }
+
+  Future<bool> updateReview({
+    required int reviewId,
+    required int rating,
+    required String comment,
+    required String semester,
+    required String captchaToken,
+    String? reviewerName,
+    String? reviewerAvatar,
+  }) async {
+    final creds = await ref.read(walletProvider.notifier).loadCredentials();
+    try {
+      final response = await _reviewRepository.updateReview(
+        reviewId: reviewId,
+        rating: rating,
+        comment: comment,
+        semester: semester,
+        captchaToken: captchaToken,
+        editToken:
+            creds != null
+                ? HmacHelper.editToken(
+                    reviewId: reviewId,
+                    userSecret: creds.userSecret,
+                  )
+                : null,
+        walletUserHash: creds?.userHash,
+        reviewerName: reviewerName,
+        reviewerAvatar: reviewerAvatar,
+        cancelToken: _cancelToken,
+      );
+      if (!response.success) return false;
       ref.invalidateSelf();
       return true;
     } catch (_) {

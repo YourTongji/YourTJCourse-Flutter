@@ -14,6 +14,7 @@ import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'features/update/auto_update_gate.dart';
+import 'features/wallet/wallet_view.dart';
 import 'domain/models/runtime_state.dart';
 
 Future<void> main() async {
@@ -160,6 +161,11 @@ final _router = GoRouter(
         }
         return CourseDetailView(courseId: courseId);
       },
+    ),
+    GoRoute(
+      path: '/wallet',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const WalletView(),
     ),
   ],
 );
