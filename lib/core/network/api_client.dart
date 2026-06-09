@@ -63,6 +63,18 @@ class ApiClient {
     return decode(response.data);
   }
 
+  Future<T> patch<T>(
+    String path, {
+    Object? body,
+    required T Function(Object? json) decode,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _request(
+      () => _dio.patch<Object?>(path, data: body, cancelToken: cancelToken),
+    );
+    return decode(response.data);
+  }
+
   Future<T> delete<T>(
     String path, {
     Object? body,
