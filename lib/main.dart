@@ -13,6 +13,7 @@ import 'features/course_detail/course_detail_view.dart';
 import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
+import 'features/settings/theme_provider.dart';
 import 'features/update/auto_update_gate.dart';
 import 'features/wallet/transaction_history_view.dart';
 import 'features/wallet/wallet_registration_view.dart';
@@ -25,25 +26,28 @@ Future<void> main() async {
   runApp(const ProviderScope(child: YourTJCourseApp()));
 }
 
-class YourTJCourseApp extends StatelessWidget {
+class YourTJCourseApp extends ConsumerWidget {
   const YourTJCourseApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeState = ref.watch(themeStateProvider).value;
+    final seedColor = themeState?.seedColor ?? LkcnColors.primary;
+    final themeMode = themeState?.mode ?? ThemeMode.system;
     return MaterialApp.router(
       title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      theme: _buildTheme(Brightness.light, seedColor),
+      darkTheme: _buildTheme(Brightness.dark, seedColor),
+      themeMode: themeMode,
       routerConfig: _router,
     );
   }
 }
 
-ThemeData _buildTheme(Brightness brightness) {
+ThemeData _buildTheme(Brightness brightness, [Color? seedColor]) {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: LkcnColors.primary,
+    seedColor: seedColor ?? LkcnColors.primary,
     brightness: brightness,
   );
   return ThemeData(

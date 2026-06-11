@@ -123,7 +123,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     final wallet = ref.watch(walletProvider);
 
     return wallet.when(
-      loading: () => const SizedBox.shrink(),
+      loading: () => WalletCard(
+        balance: 0,
+        mode: WalletCardMode.compact,
+        isLoading: true,
+        label: '积分',
+        onTap: () => context.push('/wallet'),
+      ),
       error: (_, _) => WalletCard(
         balance: 0,
         mode: WalletCardMode.compact,

@@ -21,7 +21,14 @@ import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
 import '../../shared/widgets/rating_stars.dart';
+import '../../domain/repositories/local_review_store.dart';
 import 'course_detail_controller.dart';
+
+/// Set of locally-created review IDs (owned by this device).
+final _ownedReviewIdsProvider = FutureProvider.autoDispose<Set<int>>((ref) async {
+  final mine = await ref.watch(localReviewStoreProvider).loadMine();
+  return mine.map((e) => e.review.id).toSet();
+});
 
 class CourseDetailView extends ConsumerWidget {
   const CourseDetailView({super.key, required this.courseId});
@@ -132,16 +139,22 @@ class CourseDetailView extends ConsumerWidget {
                     itemCount: state.visibleReviews.length,
                     itemBuilder: (context, index) {
                       final review = state.visibleReviews[index];
+                      final ownedIds = ref.watch(_ownedReviewIdsProvider)
+                          .value ?? {};
+                      final isOwn = ownedIds.contains(review.id);
                       return ReviewCard(
                         course: course,
                         review: review,
+                        isOwnReview: isOwn,
                         favorited: state.favoriteReviewIds.contains(review.id),
                         onLike: () => controller.toggleLike(review.id),
                         onHide: () => controller.hideReview(review.id),
                         onFavorite: () => controller.toggleFavorite(review.id),
                         onReport: () =>
                             _showReportSheet(context, controller, review.id),
-                        onEdit: () => _editReview(context, ref, controller, review),
+                        onEdit: isOwn
+                            ? () => _editReview(context, ref, controller, review)
+                            : null,
                       );
                     },
                   ),
@@ -1203,6 +1216,7 @@ class ReviewCard extends StatelessWidget {
     super.key,
     required this.course,
     required this.review,
+    this.isOwnReview = false,
     required this.favorited,
     required this.onLike,
     required this.onHide,
@@ -1213,6 +1227,7 @@ class ReviewCard extends StatelessWidget {
 
   final CourseDetail course;
   final Review review;
+  final bool isOwnReview;
   final bool favorited;
   final VoidCallback onLike;
   final VoidCallback onHide;
@@ -1264,7 +1279,8 @@ class ReviewCard extends StatelessWidget {
                     const PopupMenuItem(value: 'share', child: Text('生成分享图')),
                     const PopupMenuItem(value: 'hide', child: Text('隐藏')),
                     const PopupMenuItem(value: 'report', child: Text('举报')),
-                    if (onEdit != null)
+                    // 仅自己的评价显示编辑选项
+                    if (isOwnReview)
                       const PopupMenuItem(value: 'edit', child: Text('编辑')),
                   ],
                 ),
@@ -1305,6 +1321,21 @@ class ReviewCard extends StatelessWidget {
                   label: const Text('分享图'),
                 ),
               ],
+            ),
+            // ── Bottom row: sqid ──────────────────────────
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '#${review.sqid}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
