@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/app_states.dart';
+import '../../shared/widgets/wallet_card.dart';
 import 'wallet_controller.dart';
 
 class WalletView extends ConsumerWidget {
@@ -66,43 +67,11 @@ class WalletView extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Wallet card
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [scheme.primaryContainer, scheme.primary.withValues(alpha: 0.3)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      ClipOval(
-                        child: Image.asset('assets/images/app_logo.png',
-                            width: 60, height: 60, fit: BoxFit.cover),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('积分余额',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                    color: scheme.onPrimaryContainer)),
-                            const SizedBox(height: 4),
-                            Text('${data.balance}',
-                                style: theme.textTheme.displaySmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: scheme.onPrimaryContainer)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              // Wallet card — fluxdo-inspired full gradient card
+              WalletCard(
+                balance: data.balance,
+                mode: WalletCardMode.full,
+                onRefresh: () => ref.invalidate(walletProvider),
               ),
               const SizedBox(height: 20),
 
@@ -125,6 +94,26 @@ class WalletView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
               ],
+
+              // Transaction history entry
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: scheme.tertiaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.receipt_long_outlined,
+                        size: 20, color: scheme.onTertiaryContainer),
+                  ),
+                  title: const Text('交易记录'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/wallet/history'),
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Info card
               DecoratedBox(

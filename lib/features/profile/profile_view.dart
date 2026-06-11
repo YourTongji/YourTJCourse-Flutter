@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../domain/repositories/local_review_store.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/rating_stars.dart';
+import '../../shared/widgets/wallet_card.dart';
 import '../course_detail/course_detail_controller.dart';
 import '../course_detail/course_detail_view.dart';
+import '../wallet/wallet_controller.dart';
 
 final profileReviewsProvider = FutureProvider.autoDispose<ProfileReviewsState>((
   ref,
@@ -69,54 +71,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        ClipOval(child: Image.asset('assets/images/app_logo.png', width: 52)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'YourTJ Course',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              InkWell(
-                                onTap: () => context.push('/wallet'),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.account_balance_wallet_outlined,
-                                        size: 16, color: theme.colorScheme.primary),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '查看钱包与积分',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                // Wallet card — fluxdo-inspired compact mode
+                _buildWalletCardSection(ref, theme),
                 const SizedBox(height: 14),
                 SegmentedButton<int>(
                   segments: const [
@@ -159,6 +115,39 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           );
         },
       ),
+    );
+  }
+
+  /// Wallet card section in the profile.
+  Widget _buildWalletCardSection(WidgetRef ref, ThemeData theme) {
+    final wallet = ref.watch(walletProvider);
+
+    return wallet.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => WalletCard(
+        balance: 0,
+        mode: WalletCardMode.compact,
+        isError: true,
+        onRefresh: () => ref.invalidate(walletProvider),
+        onTap: () => context.push('/wallet'),
+      ),
+      data: (state) {
+        if (!state.hasWallet) {
+          return WalletCard(
+            balance: 0,
+            mode: WalletCardMode.compact,
+            isError: false,
+            label: '未注册钱包',
+            onTap: () => context.push('/wallet'),
+          );
+        }
+        return WalletCard(
+          balance: state.balance,
+          mode: WalletCardMode.compact,
+          onTap: () => context.push('/wallet'),
+          onRefresh: () => ref.invalidate(walletProvider),
+        );
+      },
     );
   }
 

@@ -14,6 +14,7 @@ import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'features/update/auto_update_gate.dart';
+import 'features/wallet/transaction_history_view.dart';
 import 'features/wallet/wallet_registration_view.dart';
 import 'features/wallet/wallet_view.dart';
 import 'domain/models/runtime_state.dart';
@@ -171,6 +172,10 @@ final _router = GoRouter(
         GoRoute(
           path: 'register',
           builder: (context, state) => const WalletRegistrationView(),
+        ),
+        GoRoute(
+          path: 'history',
+          builder: (context, state) => const TransactionHistoryView(),
         ),
       ],
     ),
