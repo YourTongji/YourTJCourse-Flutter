@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'global_loader.dart';
+
 class LoadingState extends StatelessWidget {
   const LoadingState({super.key, this.message});
 
@@ -7,15 +9,7 @@ class LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          if (message != null) ...[const SizedBox(height: 12), Text(message!)],
-        ],
-      ),
-    );
+    return GlobalLoader(message: message, size: 180);
   }
 }
 
