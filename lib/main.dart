@@ -237,20 +237,20 @@ class AppShell extends StatelessWidget {
             child: _SplashGate(
               child: Scaffold(
                 body: navigationShell,
-            bottomNavigationBar: _AppNavigationBar(
-              active: navigationShell.currentIndex,
-              onChange: (index) {
-                navigationShell.goBranch(
-                  index,
-                  initialLocation: index == navigationShell.currentIndex,
-                );
-              },
+                bottomNavigationBar: _AppNavigationBar(
+                  active: navigationShell.currentIndex,
+                  onChange: (index) {
+                    navigationShell.goBranch(
+                      index,
+                      initialLocation: index == navigationShell.currentIndex,
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
-      ),
-      ),
-    );
+      );
     });
   }
 }

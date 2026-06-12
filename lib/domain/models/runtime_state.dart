@@ -114,7 +114,7 @@ class MaintenanceConfig {
 
 class MaintenanceProgressItem {
   const MaintenanceProgressItem({
-    required this.id,
+    this.id,
     required this.label,
     this.done = false,
     this.active = false,
@@ -123,14 +123,14 @@ class MaintenanceProgressItem {
   factory MaintenanceProgressItem.fromJson(Object? json) {
     final map = asJsonMap(json);
     return MaintenanceProgressItem(
-      id: readString(map['id']) ?? '',
+      id: readString(map['id']),
       label: readString(map['label']) ?? '',
       done: readBool(map['done']) ?? false,
       active: readBool(map['active']) ?? false,
     );
   }
 
-  final String id;
+  final String? id;
   final String label;
   final bool done;
   final bool active;
