@@ -94,13 +94,11 @@ class ThemeSettingsView extends ConsumerWidget {
           Card(
             child: Column(
               children: DynamicSchemeVariant.values.map((variant) {
-                return RadioListTile<DynamicSchemeVariant>(
+                final sel = themeState.schemeVariant == variant;
+                return ListTile(
                   title: Text(_variantLabel(variant)),
-                  value: variant,
-                  groupValue: themeState.schemeVariant,
-                  onChanged: (v) {
-                    if (v != null) ref.read(themeProvider.notifier).setSchemeVariant(v);
-                  },
+                  trailing: sel ? const Icon(Icons.check, size: 18) : null,
+                  onTap: () => ref.read(themeProvider.notifier).setSchemeVariant(variant),
                 );
               }).toList(),
             ),

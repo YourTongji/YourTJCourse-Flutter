@@ -78,8 +78,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   static ThemeState _loadTheme(SharedPreferences prefs) {
     final savedMode = prefs.getString(_themeModeKey);
     ThemeMode mode = ThemeMode.system;
-    if (savedMode == 'light') mode = ThemeMode.light;
-    else if (savedMode == 'dark') mode = ThemeMode.dark;
+    if (savedMode == 'light') {
+      mode = ThemeMode.light;
+    } else if (savedMode == 'dark') {
+      mode = ThemeMode.dark;
+    }
 
     final savedColorValue = prefs.getInt(_seedColorKey);
     Color seedColor = ThemeState._kDefaultSeed;
