@@ -25,7 +25,7 @@ import '../../domain/repositories/local_review_store.dart';
 import 'course_detail_controller.dart';
 
 /// Set of locally-created review IDs (owned by this device).
-final _ownedReviewIdsProvider = FutureProvider.autoDispose<Set<int>>((ref) async {
+final _ownedReviewIdsProvider = FutureProvider<Set<int>>((ref) async {
   final mine = await ref.watch(localReviewStoreProvider).loadMine();
   return mine.map((e) => e.review.id).toSet();
 });

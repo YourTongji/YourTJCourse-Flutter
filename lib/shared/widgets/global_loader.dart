@@ -1,259 +1,23 @@
 import 'dart:math' as math;
-import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// The YTJ brand glow blue used throughout the animated loader.
+/// The YTJ brand glow blue.
 const _kGlowBlue = Color(0xFF51ddff);
 
-// ─── Animated Cat Logo ─────────────────────────────────────────────
+// ─── SVG fragments (matching viewBox 0 0 1254 1254) ───────────────
 
-/// The blink-tail cat logo with Flutter-driven animations.
-///
-/// Extracted from `blink-tail.html` — the cat body is rendered via SVG,
-/// while the tail sway and eye blink are driven by [AnimationController]
-/// for precise control and composability.
-class AnimatedCatLogo extends StatefulWidget {
-  const AnimatedCatLogo({
-    super.key,
-    this.size = 200,
-  });
+const _kCatBodySvg = '''<svg viewBox="0 0 1254 1254" xmlns="http://www.w3.org/2000/svg">
+<path d="m717.41,759.16c0,27.3 -0.52,54.62 0.16,81.9c0.57,22.76 2.52,45.49 9.98,67.31c4.56,13.35 10.76,25.8 20.39,36.28c14.6,15.89 33.09,22.76 54.33,23.3c24.99,0.64 47.89,-6.6 69.49,-18.49c34.73,-19.1 62.66,-45.91 86.11,-77.5c29.91,-40.31 49.75,-85.46 63.35,-133.59c14.28,-50.55 20.74,-102.04 17.76,-154.47c-3.65,-64.24 -20.73,-124.51 -56.27,-178.79c-29.69,-45.34 -69.34,-78.31 -120.86,-96.45c-7.29,-2.57 -14.51,-5.93 -20.97,-10.13c-14.14,-9.2 -17.87,-26.27 -8.64,-39.08c7.88,-10.93 19.74,-13.45 32.1,-11.36c52.04,8.82 93.96,35.56 128.87,74.22c31.99,35.43 54.64,76.46 72.05,120.65c16.72,42.46 26.37,86.52 29.91,131.92c3.49,44.76 -0.11,89.12 -8.6,133.14c-10.2,52.9 -27.93,103.03 -55.28,149.56c-41.61,70.79 -99.72,123.66 -173.89,158.78c-15.92,7.54 -32.24,14.23 -48.48,21.07c-5.79,2.44 -9.37,6.14 -9.74,12.55c-0.3,5.32 -0.4,10.65 -0.88,15.95c-1.06,11.67 -9.79,18.39 -20.08,15.65c-6.22,-1.65 -9.88,-6.13 -10.2,-12.58c-0.11,-2.33 -0.02,-4.66 -0.08,-6.99c-0.18,-6.58 -2.57,-8.18 -8.86,-6.72c-17.81,4.14 -35.56,8.66 -53.53,11.98c-52.13,9.64 -104.08,7.1 -155.75,-3.75c-12.85,-2.7 -25.58,-5.99 -38.36,-9.08c-6.03,-1.46 -8.94,-0.19 -11.67,5.46c-2.24,4.64 -4.08,9.51 -6.64,13.97c-3.56,6.22 -10.21,9.14 -16.45,7.84c-7.21,-1.5 -11.88,-5.98 -12.39,-13.09c-0.23,-3.32 0.99,-6.82 1.96,-10.12c1.08,-3.66 2.77,-7.14 3.93,-10.78c1.67,-5.24 0.2,-8.06 -4.71,-10.45c-13,-6.33 -25.98,-12.72 -38.92,-19.16c-5.43,-2.71 -7.86,-2.09 -11.03,3.28c-2.37,4.01 -4.47,8.19 -7.05,12.05c-3.66,5.48 -8.72,8.81 -15.61,7.64c-7.07,-1.2 -11.97,-5.36 -13.16,-12.5c-0.5,-3.01 0.51,-6.52 1.64,-9.5c2.06,-5.42 4.75,-10.6 7.11,-15.91c2.66,-5.98 1.86,-8.93 -3.43,-12.83c-59.1,-43.58 -101.16,-100.41 -130.05,-167.42c-16.56,-38.39 -27.32,-78.43 -33.03,-119.8c-4.29,-31.08 -5.26,-62.35 -2.81,-93.63c5.45,-69.59 25.89,-134.48 60.87,-194.97c10.46,-18.08 19.83,-36.9 28.21,-56.03c8.44,-19.26 11.54,-40.14 14.54,-60.91c2.42,-16.74 4.37,-33.66 11.73,-49.24c5.04,-10.66 12.42,-18.85 24.29,-22.03c14.09,-3.77 25.94,1.38 35.32,11.06c8.73,9.01 15.78,19.65 23.66,29.49c5.29,6.61 10.32,13.5 16.24,19.51c6.67,6.76 15.34,10.35 24.9,9.46c16.7,-1.55 33.33,-3.86 49.99,-5.82c21.3,-2.51 42.61,-5.01 63.92,-7.45c4.96,-0.57 9.96,-0.74 14.91,-1.31c18.53,-2.12 28.44,-11.42 33.8,-30.91c3.74,-13.6 7.18,-27.36 12.25,-40.47c2.84,-7.36 7.72,-14.59 13.44,-20.03c11.36,-10.83 28.18,-9.76 40.81,0.97c12.45,10.58 20.67,24.26 28.25,38.36c9.92,18.46 19.19,37.28 29.4,55.58c13.36,23.94 30.41,45.27 48.34,65.94c16.9,19.48 34.2,38.68 46.38,61.72c12.4,23.45 19.56,48.36 19.97,74.93c0.23,14.91 -2.02,29.56 -8.8,43.11c-7.69,15.38 -22.61,23.46 -37.43,20.47c-17.04,-3.43 -25.22,-19.06 -23.09,-33.95c1.43,-10 4.35,-19.79 6.03,-29.76c4,-23.63 -0.58,-45.97 -10.99,-67.28c-10.75,-22 -25.35,-41.38 -41.33,-59.77c-15.39,-17.72 -30.93,-35.31 -46.48,-52.89c-2.75,-3.11 -5.77,-6.01 -8.92,-8.71c-11.34,-9.7 -22.85,-8.01 -30.4,4.85c-5.94,10.12 -14.62,14.58 -26.01,14.47c-3.66,-0.03 -7.32,-0.26 -10.98,-0.43c-14.62,-0.68 -29.23,-1.81 -43.86,-1.97c-33.98,-0.36 -67.29,4.87 -100.08,13.48c-13.3,3.5 -26.43,7.67 -39.57,11.73c-13.49,4.17 -25.05,1.49 -35.16,-8.55c-10.41,-10.33 -20.79,-9.39 -29.25,2.54c-3.25,4.58 -5.83,9.66 -8.56,14.59c-14.22,25.74 -28.73,51.32 -42.46,77.31c-11.81,22.37 -19.21,45.96 -16.42,71.84c1.87,17.33 8.33,32.89 18.27,46.86c18.8,26.39 38.09,52.43 57.28,78.55c4.92,6.69 10.16,13.15 15.31,19.67c1.54,1.96 3.2,3.84 4.93,5.64c11.8,12.26 24.83,12.85 37.23,1.2c23.18,-21.78 40.71,-47.25 50.97,-77.66c2.61,-7.75 6.7,-15.31 11.51,-21.95c9.58,-13.21 27.21,-18.59 41.28,-13.77c15.02,5.15 23.74,20.92 20.72,36.55c-3.01,15.58 -11.08,28.44 -21.03,40.22c-17.18,20.34 -35.16,40.02 -51.96,60.66c-11.42,14.03 -22,28.84 -31.83,44.04c-6.74,10.42 -9.55,22.71 -9.66,35.23c-0.18,19.77 -0.47,39.58 0.35,59.32c0.73,17.68 3.28,35.42 13.15,50.62c5.91,9.1 13.39,17.33 21,25.14c8.43,8.65 17.02,16.89 19.99,29.19c4.01,16.58 -7.39,32.71 -24.39,34.45c-23.81,2.43 -41.24,-9.24 -55.83,-26.08c-19.99,-23.07 -26.15,-51.21 -26.92,-80.68c-0.68,-26.12 -0.27,-52.27 -0.02,-78.4c0.22,-22.89 -6.05,-43.23 -19.9,-61.82c-23.36,-31.35 -47.24,-62.24 -73.48,-91.25c-2.88,-3.19 -6.07,-6.27 -9.62,-8.64c-7.46,-4.97 -15.35,-2.26 -17.66,6.36c-1.57,5.88 -2.21,12.13 -2.35,18.24c-0.77,33.6 2.75,66.77 10.18,99.58c9.42,41.61 24.24,81.15 45.01,118.36c25.56,45.8 57.56,86.24 100.59,117.11c32.74,23.49 69.03,39.07 108.04,48.8c29.22,7.28 58.92,10.85 88.93,11.43c28.52,0.54 56.85,-2.04 84.72,-8.49c0.81,-0.19 1.61,-0.42 2.42,-0.63c3.8,-0.98 7.59,-2.14 8.47,-6.66c0.89,-4.59 -2.25,-6.94 -5.55,-9.13c-27.39,-18.12 -40.38,-45.13 -46.32,-76.18c-6.21,-32.46 -4.44,-65.31 -3.47,-98.07c1.02,-34.26 2.4,-68.51 3.27,-102.78c0.43,-16.96 0.34,-33.95 -0.11,-50.9c-0.14,-5.18 -1.63,-10.54 -3.55,-15.41c-3.86,-9.78 -11.97,-14.08 -22.08,-13.98c-8.28,0.08 -16.55,1.59 -24.84,1.76c-7.58,0.16 -15.43,0.45 -22.69,-1.29c-9.16,-2.19 -15.17,-8.82 -16.45,-18.62c-1.35,-10.32 2.53,-18.77 10.79,-24.77c10.3,-7.47 22.5,-9.67 34.84,-10.68c44.55,-3.66 89.17,-3.13 133.75,-1.03c13.67,0.64 27.59,1.3 40.04,8.66c11.34,6.7 16.57,17.59 13.63,29.8c-2.61,10.85 -12.53,18.45 -25.39,18.49c-8.45,0.02 -16.89,-1.18 -25.35,-1.62c-7.3,-0.38 -14.65,-1.05 -21.91,-0.56c-12.01,0.81 -20.64,9.7 -22.37,23.04c-1.19,9.21 -1.72,18.55 -1.83,27.84c-0.26,21.64 -0.08,43.29 -0.08,64.94c0.26,0 0.52,0 0.77,0l0.02,0.04z" fill="#036099"/>
+</svg>''';
 
-  final double size;
+// ─── Wavy Loading Indicator ─────────────────────────────────────────
 
-  @override
-  State<AnimatedCatLogo> createState() => _AnimatedCatLogoState();
-}
-
-class _AnimatedCatLogoState extends State<AnimatedCatLogo>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))
-      ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final size = widget.size;
-    // The cat body SVG (eyes visible by default).
-    return SizedBox(
-      width: size,
-      height: size,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) {
-          final tailRotation = _tailSway(_ctrl.value);
-          final (eyeOpacity, eyeScale) = _blink(_ctrl.value);
-          final (chevronOpacity, _) = _blinkChevrons(_ctrl.value);
-
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              // Base cat body
-              Positioned.fill(
-                child: SvgPicture.asset(
-                  'assets/images/logo-animated.svg',
-                  fit: BoxFit.contain,
-                ),
-              ),
-
-              // Tail overlay — rotate the tail portion
-              Positioned(
-                left: size * 0.66,
-                top: size * 0.30,
-                width: size * 0.35,
-                height: size * 0.45,
-                child: Transform.rotate(
-                  angle: tailRotation,
-                  child: SvgPicture.string(
-                    _tailSvg,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-
-              // Eye blink — fade out open eyes, fade in closed lines
-              // Left eye
-              Positioned(
-                left: size * 0.34,
-                top: size * 0.305,
-                width: size * 0.08,
-                height: size * 0.06,
-                child: Opacity(
-                  opacity: eyeOpacity,
-                  child: Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.diagonal3Values(1.0, eyeScale, 1.0),
-                    child: SvgPicture.string(
-                      _leftEyeClosedSvg,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-              // Right eye
-              Positioned(
-                left: size * 0.515,
-                top: size * 0.30,
-                width: size * 0.08,
-                height: size * 0.06,
-                child: Opacity(
-                  opacity: eyeOpacity,
-                  child: Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.diagonal3Values(1.0, eyeScale, 1.0),
-                    child: SvgPicture.string(
-                      _rightEyeClosedSvg,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Chevron blink lines (appear when eyes close)
-              Positioned(
-                left: size * 0.33,
-                top: size * 0.305,
-                width: size * 0.10,
-                height: size * 0.06,
-                child: Opacity(
-                  opacity: chevronOpacity,
-                  child: SvgPicture.string(
-                    _leftChevronSvg,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: size * 0.505,
-                top: size * 0.30,
-                width: size * 0.10,
-                height: size * 0.06,
-                child: Opacity(
-                  opacity: chevronOpacity,
-                  child: SvgPicture.string(
-                    _rightChevronSvg,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Animation math ─────────────────────────────────────────────
-
-  double _tailSway(double t) {
-    // Maps t[0,1) through the CSS keyframes:
-    // 0%:-1.4°, 30%:3.2°, 58%:-3.6°, 78%:2°, 100%:-1.4°
-    const keyframes = [
-      (0.00, -1.4),
-      (0.30, 3.2),
-      (0.58, -3.6),
-      (0.78, 2.0),
-      (1.00, -1.4),
-    ];
-    for (var i = 0; i < keyframes.length - 1; i++) {
-      final (t0, v0) = keyframes[i];
-      final (t1, v1) = keyframes[i + 1];
-      if (t >= t0 && t <= t1) {
-        final p = (t - t0) / (t1 - t0);
-        return lerpDouble(v0, v1, p)! * (math.pi / 180);
-      }
-    }
-    return 0;
-  }
-
-  (double, double) _blink(double t) {
-    // Map t through hide-open-eyes keyframe
-    // 6%→opacity:1,scale:1 → 14%→opacity:0,scale:0.08 → 29%→opacity:0.55,scale:0.42 → 35%→1
-    if (t < 0.05) return (1.0, 1.0);
-    if (t < 0.10) {
-      final p = (t - 0.05) / 0.05;
-      return (1.0 - p * 0.55, 1.0 - p * 0.66);
-    }
-    if (t < 0.14) {
-      final p = (t - 0.10) / 0.04;
-      return (0.45 * (1 - p), 0.34 * (1 - p));
-    }
-    if (t < 0.22) return (0.0, 0.08);
-    if (t < 0.29) {
-      final p = (t - 0.22) / 0.07;
-      return (p * 0.55, 0.08 + p * 0.34);
-    }
-    if (t < 0.35) {
-      final p = (t - 0.29) / 0.06;
-      return (0.55 + p * 0.45, 0.42 + p * 0.58);
-    }
-    return (1.0, 1.0);
-  }
-
-  (double, void) _blinkChevrons(double t) {
-    // Opacity: 12%→0.86, 17%-24%→1, 29%→0.38
-    if (t < 0.11) return (0.0, 0);
-    if (t < 0.12) return ((t - 0.11) / 0.01 * 0.86, 0);
-    if (t < 0.17) return (0.86, 0);
-    if (t < 0.24) return (1.0, 0);
-    if (t < 0.29) return (1.0 - (t - 0.24) / 0.05 * 0.62, 0);
-    if (t < 0.32) return (0.38 - (t - 0.29) / 0.03 * 0.38, 0);
-    return (0.0, 0);
-  }
-}
-
-// ─── Inline SVG fragments for animated parts ───────────────────────
-
-const _tailSvg = '''
-<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-  <path d="m0,0c0,0 30,-60 80,-80c50,-20 120,-30 160,10c40,40 60,100 60,160c0,60 -20,100 -50,120c-30,20 -70,10 -100,-20c-30,-30 -50,-80 -50,-130c0,-50 20,-90 50,-110c30,-20 60,-10 80,20c20,30 30,70 20,100c-10,30 -30,40 -50,30c-20,-10 -30,-30 -20,-50c10,-20 30,-20 40,-10c10,10 10,30 0,40" fill="#046199"/>
-</svg>
-''';
-
-const _leftEyeClosedSvg = '''
-<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-  <path d="M10,30 L50,45 L90,30" fill="none" stroke="#07629a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-''';
-
-const _rightEyeClosedSvg = '''
-<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-  <path d="M10,30 L50,45 L90,30" fill="none" stroke="#066199" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-''';
-
-const _leftChevronSvg = '''
-<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-  <polyline points="20,50 50,25 80,50" fill="none" stroke="#07629a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-''';
-
-const _rightChevronSvg = '''
-<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-  <polyline points="20,50 50,25 80,50" fill="none" stroke="#066199" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-''';
-
-// ─── Morphing Wave Circle ─────────────────────────────────────────
-
-/// A Material 3 expressive morphing loading indicator.
-///
-/// Draws a circular ring with a flowing wave pattern in the YTJ brand blue.
-/// The cat logo sits centered inside the circle.
-class MorphingLoader extends StatefulWidget {
-  const MorphingLoader({
+/// A smooth wavy loading indicator. Three undulating waves circle around
+/// in the brand blue, inspired by Material 3 expressive loading patterns.
+class WavyLoader extends StatefulWidget {
+  const WavyLoader({
     super.key,
     this.size = 240,
     this.strokeWidth = 3.5,
@@ -263,10 +27,10 @@ class MorphingLoader extends StatefulWidget {
   final double strokeWidth;
 
   @override
-  State<MorphingLoader> createState() => _MorphingLoaderState();
+  State<WavyLoader> createState() => _WavyLoaderState();
 }
 
-class _MorphingLoaderState extends State<MorphingLoader>
+class _WavyLoaderState extends State<WavyLoader>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
@@ -289,21 +53,26 @@ class _MorphingLoaderState extends State<MorphingLoader>
       width: widget.size,
       height: widget.size,
       child: CustomPaint(
-        painter: _WaveRingPainter(
+        painter: _WavyRingPainter(
           animationValue: _ctrl.value,
           strokeWidth: widget.strokeWidth,
         ),
         child: Padding(
-          padding: EdgeInsets.all(widget.strokeWidth + 8),
-          child: const AnimatedCatLogo(size: 160),
+          padding: EdgeInsets.all(widget.strokeWidth + 16),
+          child: RepaintBoundary(
+            child: SvgPicture.string(
+              _kCatBodySvg,
+              fit: BoxFit.contain,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _WaveRingPainter extends CustomPainter {
-  _WaveRingPainter({
+class _WavyRingPainter extends CustomPainter {
+  _WavyRingPainter({
     required this.animationValue,
     this.strokeWidth = 3.5,
   });
@@ -314,61 +83,57 @@ class _WaveRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width - strokeWidth) / 2;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    // ── Draw the wave ring ────────────────────────────────────
-    // The wave consists of segments around the circle.
-    // A sine wave sweeps around creating a rippling effect.
-    final segments = 64;
+    final radius = (size.width - strokeWidth * 2) / 2;
+    final segments = 120;
     final segmentAngle = (2 * math.pi) / segments;
-    final waveCount = 3; // number of full waves around the circle
-    final waveAmp = strokeWidth * 0.6; // wave amplitude
+    final waveCount = 4;
+    final waveAmp = strokeWidth * 0.8;
 
-    for (var i = 0; i < segments; i++) {
-      final angle = i * segmentAngle;
-      // Base position
-      final baseR = radius;
-      // Wave offset: animate around the circle
-      final waveOffset = math.sin(angle * waveCount + animationValue * 2 * math.pi);
-      final r = baseR + waveOffset * waveAmp;
+    for (var wave = 0; wave < 3; wave++) {
+      final wavePhase = wave * 2.0 * math.pi / 3;
+      final waveSpeed = 1.0 - wave * 0.15;
 
-      // Color gradient: animate hue along the ring
-      final hue = (animationValue * 360 + angle / (2 * math.pi) * 120) % 360;
-      paint.color = HSVColor.fromAHSV(1, hue.toDouble(), 0.25, 0.50).toColor();
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth - wave * 0.6
+        ..strokeCap = StrokeCap.round;
 
-      // Draw small segment
-      final x0 = center.dx + baseR * math.cos(angle);
-      final y0 = center.dy + baseR * math.sin(angle);
-      final x1 = center.dx + r * math.cos(angle + segmentAngle * 0.5);
-      final y1 = center.dy + r * math.sin(angle + segmentAngle * 0.5);
+      for (var i = 0; i < segments; i++) {
+        final angle = i * segmentAngle;
+        final waveOffset = math.sin(
+          angle * waveCount +
+              animationValue * 2 * math.pi * waveSpeed +
+              wavePhase,
+        );
+        final r = radius + waveOffset * waveAmp;
 
-      canvas.drawLine(Offset(x0, y0), Offset(x1, y1), paint);
+        paint.color = _kGlowBlue.withValues(alpha: 0.15 + (1.0 - wave * 0.25) * 0.2);
+
+        final x0 = center.dx + r * math.cos(angle);
+        final y0 = center.dy + r * math.sin(angle);
+        final x1 = center.dx + r * math.cos(angle + segmentAngle * 0.3);
+        final y1 = center.dy + r * math.sin(angle + segmentAngle * 0.3);
+
+        canvas.drawLine(Offset(x0, y0), Offset(x1, y1), paint);
+      }
     }
 
-    // ── Outer glow ────────────────────────────────────────────
+    // Glow
     final glowPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth * 0.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-    glowPaint.color = _kGlowBlue.withValues(alpha: 0.15 + 0.1 * math.sin(animationValue * 2 * math.pi));
+      ..strokeWidth = strokeWidth * 0.4
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    glowPaint.color = _kGlowBlue.withValues(alpha: 0.08 + 0.06 * math.sin(animationValue * 2 * math.pi));
     canvas.drawCircle(center, radius, glowPaint);
   }
 
   @override
-  bool shouldRepaint(_WaveRingPainter old) =>
+  bool shouldRepaint(_WavyRingPainter old) =>
       old.animationValue != animationValue;
 }
 
 // ─── Global loader ────────────────────────────────────────────────
 
-/// Global loading indicator: morphing wave circle + animated cat logo.
-///
-/// Use wherever a full-screen or inline loading indicator is needed.
-/// The [message] parameter provides loading text below the animation.
 class GlobalLoader extends StatelessWidget {
   const GlobalLoader({
     super.key,
@@ -386,7 +151,7 @@ class GlobalLoader extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          MorphingLoader(size: size),
+          WavyLoader(size: size),
           if (message != null) ...[
             const SizedBox(height: 24),
             Text(

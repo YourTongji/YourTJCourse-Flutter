@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -78,6 +79,14 @@ class SettingsView extends ConsumerWidget {
               context,
               'https://github.com/YourTongji/YourTJCourse-Flutter',
             ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('主题与钱包'),
+            subtitle: const Text('切换主题色、深浅模式、钱包退出'),
+            trailing: const Icon(Icons.chevron_right, size: 18),
+            onTap: () => context.push('/theme-settings'),
           ),
           const Divider(),
           ListTile(

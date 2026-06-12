@@ -14,6 +14,7 @@ import 'features/profile/profile_view.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'features/settings/theme_provider.dart';
+import 'features/settings/theme_settings_view.dart';
 import 'features/update/auto_update_gate.dart';
 import 'features/wallet/transaction_history_view.dart';
 import 'features/wallet/wallet_registration_view.dart';
@@ -167,6 +168,11 @@ final _router = GoRouter(
         }
         return CourseDetailView(courseId: courseId);
       },
+    ),
+    GoRoute(
+      path: '/theme-settings',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const ThemeSettingsView(),
     ),
     GoRoute(
       path: '/wallet',
