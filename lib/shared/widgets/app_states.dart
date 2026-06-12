@@ -9,7 +9,7 @@ class LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlobalLoader(message: message, size: 180);
+    return GlobalLoader(message: message);
   }
 }
 

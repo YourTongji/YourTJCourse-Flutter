@@ -2,27 +2,77 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:flutter_markdown/flutter_markdown.dart';
+
+import '../../domain/models/review.dart';
 import '../../domain/repositories/local_review_store.dart';
+import '../../domain/repositories/review_repository.dart';
+import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/rating_stars.dart';
 import '../../shared/widgets/wallet_card.dart';
 import '../course_detail/course_detail_controller.dart';
 import '../course_detail/course_detail_view.dart';
+import '../../shared/widgets/pending_edit_provider.dart';
 import '../wallet/wallet_controller.dart';
+
+/// Fetch reviews from server by wallet hash, then merge with local ones.
+/// NOT autoDispose: must stay alive and re-evaluate when walletProvider changes
+/// so that reviews with wallet_user_hash are correctly detected as editable.
+final _walletReviewsProvider = FutureProvider<List<LocalReviewEntry>>(
+  (ref) async {
+    final wallet = ref.watch(walletProvider);
+    final userHash = wallet.value?.userHash;
+    if (userHash == null || userHash.isEmpty) return [];
+    try {
+      final reviews = await ref.read(reviewRepositoryProvider).fetchWalletReviews(userHash);
+      debugPrint('[WalletReviews] fetched ${reviews.length} reviews for $userHash');
+      return reviews;
+    } catch (e) {
+      debugPrint('[WalletReviews] error: $e');
+      return [];
+    }
+  },
+);
 
 final profileReviewsProvider = FutureProvider.autoDispose<ProfileReviewsState>((
   ref,
 ) async {
   final store = ref.watch(localReviewStoreProvider);
+
+  // Load local and server reviews concurrently.
   final results = await Future.wait([
     store.loadMine(),
     store.loadFavorites(),
     store.loadHidden(),
+    ref.watch(_walletReviewsProvider.future),
   ]);
+
+  final localMine = results[0];
+  final favorites = results[1];
+  final hidden = results[2];
+  final serverMine = results[3];
+
+  // Merge: server reviews take precedence; append local-only entries.
+  final serverIds = serverMine.map((e) => e.review.id).toSet();
+  final merged = [...serverMine];
+  for (final local in localMine) {
+    if (!serverIds.contains(local.review.id)) {
+      merged.add(local);
+    }
+  }
+  // Sort all reviews by created_at descending (newest first).
+  // Parse both ISO 8601 and SQLite formats as DateTime for correct ordering.
+  merged.sort((a, b) {
+    final da = DateTime.tryParse(a.review.createdAt) ?? DateTime(0);
+    final db = DateTime.tryParse(b.review.createdAt) ?? DateTime(0);
+    return db.compareTo(da);
+  });
+
   return ProfileReviewsState(
-    mine: results[0],
-    favorites: results[1],
-    hidden: results[2],
+    mine: merged,
+    favorites: favorites,
+    hidden: hidden,
   );
 });
 
@@ -71,7 +121,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: [
-                // Wallet card — fluxdo-inspired compact mode
+                // Wallet card — compact mode
                 _buildWalletCardSection(ref, theme),
                 const SizedBox(height: 14),
                 SegmentedButton<int>(
@@ -229,10 +279,16 @@ class _ProfileReviewTile extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              entry.review.comment,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 60),
+              child: ClipRect(
+                child: MarkdownBody(
+                  data: normalizeReviewMarkdown(entry.review.comment),
+                  styleSheet: MarkdownStyleSheet(
+                    p: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -245,14 +301,9 @@ class _ProfileReviewTile extends ConsumerWidget {
                   label: const Text('打开课程'),
                 ),
                 if (mode == 0)
-                  TextButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('再次编辑能力开发中')),
-                      );
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('再次编辑'),
+                  _EditReviewButton(
+                    courseId: entry.courseId,
+                    review: entry.review,
                   ),
                 if (mode == 1)
                   TextButton.icon(
@@ -285,6 +336,45 @@ class _ProfileReviewTile extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Shows "再次编辑" with context-appropriate hints.
+class _EditReviewButton extends ConsumerWidget {
+  const _EditReviewButton({required this.courseId, required this.review});
+
+  final int courseId;
+  final Review review;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final wallet = ref.watch(walletProvider);
+    final hasWallet = wallet.value?.hasWallet ?? false;
+
+    // Check if this review exists on the server with wallet binding.
+    final serverReviews = ref.watch(_walletReviewsProvider);
+    final isOnServer = serverReviews.value?.any((e) => e.review.id == review.id) ?? false;
+
+    return TextButton.icon(
+      onPressed: () {
+        if (!hasWallet) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('再次编辑需要绑定积分钱包')),
+          );
+          return;
+        }
+        if (!isOnServer) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('暂不支持仅本机评论编辑')),
+          );
+          return;
+        }
+        ref.read(pendingEditProvider.notifier).set(courseId, review);
+        context.push('/course/$courseId');
+      },
+      icon: const Icon(Icons.edit_outlined),
+      label: const Text('再次编辑'),
     );
   }
 }

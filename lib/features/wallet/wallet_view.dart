@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/app_states.dart';
+import 'package:yourtjcourse_flutter/services/log_writer.dart';
+
+import '../../shared/widgets/credit_webview_page.dart';
 import '../../shared/widgets/wallet_card.dart';
 import 'wallet_controller.dart';
 
@@ -67,7 +71,7 @@ class WalletView extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Wallet card — fluxdo-inspired full gradient card
+              // Wallet card — full gradient card
               WalletCard(
                 balance: data.balance,
                 mode: WalletCardMode.full,
@@ -109,8 +113,56 @@ class WalletView extends ConsumerWidget {
                         size: 20, color: scheme.onTertiaryContainer),
                   ),
                   title: const Text('交易记录'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
+                  trailing: Icon(Icons.chevron_right_rounded, size: 18,
+                      color: scheme.onSurfaceVariant),
                   onTap: () => context.push('/wallet/history'),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Marketplace entries ───────────────────────
+              Text('积分广场',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.work_outline,
+                            size: 20, color: scheme.onPrimaryContainer),
+                      ),
+                      title: const Text('任务悬赏'),
+                      trailing: Icon(Icons.chevron_right_rounded, size: 18,
+                          color: scheme.onSurfaceVariant),
+                      onTap: () => _openMarketplace(context, 'tasks'),
+                    ),
+                    Divider(height: 1, indent: 56,
+                        color: scheme.outlineVariant.withValues(alpha: 0.3)),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: scheme.secondaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.shopping_bag_outlined,
+                            size: 20, color: scheme.onSecondaryContainer),
+                      ),
+                      title: const Text('商品交易'),
+                      trailing: Icon(Icons.chevron_right_rounded, size: 18,
+                          color: scheme.onSurfaceVariant),
+                      onTap: () => _openMarketplace(context, 'products'),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -130,16 +182,75 @@ class WalletView extends ConsumerWidget {
                       Text('如何获得积分？',
                           style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
-                      _BenefitRow(icon: Icons.edit_note, text: '撰写课程评价 +10 积分'),
-                      _BenefitRow(icon: Icons.thumb_up, text: '收到的点赞可获得额外积分'),
-                      _BenefitRow(icon: Icons.edit, text: '编辑评价也可获得积分奖励'),
+                      _BenefitRow(icon: Icons.edit_note, text: '1 条 50 字以上点评  +10（立即获得）'),
+                      _BenefitRow(icon: Icons.thumb_up, text: '收到 1 个点赞  +3（每日结算）'),
                     ],
                   ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Wallet logout ─────────────────────────
+              Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: scheme.errorContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.logout_rounded, color: scheme.error, size: 20),
+                  ),
+                  title: const Text('退出钱包'),
+                  subtitle: const Text('清除本地凭证，可用助记词恢复'),
+                  onTap: () => _confirmLogout(context, ref),
                 ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  static Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('退出钱包'),
+        content: const Text('将清除本地保存的钱包凭证，如需恢复请使用助记词。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('确认退出')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    const storage = FlutterSecureStorage();
+    await storage.delete(key: 'de.yourtj.course.wallet.mnemonic');
+    await storage.delete(key: 'de.yourtj.course.wallet.userHash');
+    await storage.delete(key: 'de.yourtj.course.wallet.userSecret');
+    try { await clearCreditStorage(); } catch (_) {}
+    LogWriter.instance.write({
+      'timestamp': DateTime.now().toIso8601String(),
+      'level': 'info',
+      'type': 'lifecycle',
+      'event': 'wallet_logout',
+      'message': '钱包退出',
+    });
+    ref.invalidate(walletProvider);
+  }
+
+  static void _openMarketplace(BuildContext context, String tab) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreditWebViewPage(
+          targetPath: 'marketplace-$tab',
+        ),
       ),
     );
   }

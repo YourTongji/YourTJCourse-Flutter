@@ -40,6 +40,13 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# OMC local state
+.omc/
+
+# Android build artifacts
+android/app/build/
+android/build/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
@@ -49,5 +56,7 @@ app.*.map.json
 ClAUDE.md
 AGENTS.md
 .claude/
+# Abandoned SVG
+assets/images/blink-tail-animated.svg
 /android/key.properties
 /android/app/*.jks

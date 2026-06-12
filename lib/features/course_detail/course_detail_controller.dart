@@ -328,6 +328,7 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
         captchaToken: captchaToken,
         reviewerName: reviewerName,
         reviewerAvatar: reviewerAvatar,
+        walletUserHash: (await ref.read(walletProvider.notifier).loadCredentials())?.userHash,
         cancelToken: _cancelToken,
       );
       if (!response.success) return false;
@@ -389,6 +390,21 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
   }) async {
     try {
       final creds = await ref.read(walletProvider.notifier).loadCredentials();
+
+      // Attempt to claim edit token if not yet set (fire-and-forget).
+      if (creds != null) {
+        final token = HmacHelper.editToken(reviewId: reviewId, userSecret: creds.userSecret);
+        try {
+          await ref.read(walletRepositoryProvider).setEditToken(
+            reviewId: reviewId,
+            editToken: token,
+            walletUserHash: creds.userHash,
+          );
+        } catch (_) {
+          // Token may already be set — proceed regardless.
+        }
+      }
+
       final response = await _reviewRepository.updateReview(
         reviewId: reviewId,
         rating: rating,

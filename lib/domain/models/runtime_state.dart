@@ -47,26 +47,105 @@ class MaintenanceState {
 class MaintenanceConfig {
   const MaintenanceConfig({
     this.title,
+    this.subtitle,
+    this.statusLabel,
     this.message,
-    this.estimatedDowntime,
+    this.eta,
+    this.progress,
+    this.contactEmail,
+    this.socialLinks,
     this.lastUpdated,
   });
 
   factory MaintenanceConfig.fromJson(Object? json) {
     final map = asJsonMap(json);
+    final rawProgress = map['progress'];
     return MaintenanceConfig(
       title: readString(map['title']),
+      subtitle: readString(map['subtitle']),
+      statusLabel: readString(map['statusLabel']),
       message: readString(map['message']),
-      estimatedDowntime:
-          readString(map['estimated_downtime']) ?? readString(map['eta']),
+      eta: readString(map['eta']) ?? readString(map['estimated_downtime']),
+      progress: rawProgress is List
+          ? rawProgress
+              .map((item) => MaintenanceProgressItem.fromJson(item))
+              .toList(growable: false)
+          : null,
+      contactEmail: _readNestedString(map, 'contact', 'email'),
+      socialLinks: _readSocialLinks(map['socialLinks']),
       lastUpdated: readString(map['lastUpdated']),
     );
   }
 
   final String? title;
+  final String? subtitle;
+  final String? statusLabel;
   final String? message;
-  final String? estimatedDowntime;
+  final String? eta;
+  final List<MaintenanceProgressItem>? progress;
+  final String? contactEmail;
+  final List<SocialLink>? socialLinks;
   final String? lastUpdated;
+
+  static String? _readNestedString(Map<String, dynamic> map, String outer, String inner) {
+    final outerMap = map[outer];
+    if (outerMap is Map) {
+      final val = outerMap[inner];
+      if (val is String && val.trim().isNotEmpty) return val.trim();
+    }
+    return null;
+  }
+
+  static List<SocialLink>? _readSocialLinks(Object? json) {
+    if (json is! List) return null;
+    final links = <SocialLink>[];
+    for (final item in json) {
+      final map = asJsonMap(item);
+      final platform = readString(map['platform']);
+      final url = readString(map['url']);
+      final label = readString(map['label']);
+      if (platform != null && url != null && label != null) {
+        links.add(SocialLink(platform: platform, url: url, label: label));
+      }
+    }
+    return links.isNotEmpty ? links : null;
+  }
+}
+
+class MaintenanceProgressItem {
+  const MaintenanceProgressItem({
+    required this.id,
+    required this.label,
+    this.done = false,
+    this.active = false,
+  });
+
+  factory MaintenanceProgressItem.fromJson(Object? json) {
+    final map = asJsonMap(json);
+    return MaintenanceProgressItem(
+      id: readString(map['id']) ?? '',
+      label: readString(map['label']) ?? '',
+      done: readBool(map['done']) ?? false,
+      active: readBool(map['active']) ?? false,
+    );
+  }
+
+  final String id;
+  final String label;
+  final bool done;
+  final bool active;
+}
+
+class SocialLink {
+  const SocialLink({
+    required this.platform,
+    required this.url,
+    required this.label,
+  });
+
+  final String platform;
+  final String url;
+  final String label;
 }
 
 class Announcement {

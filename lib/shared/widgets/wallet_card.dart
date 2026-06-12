@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'credit_webview_page.dart';
+
 /// Display mode for [WalletCard].
 enum WalletCardMode { full, compact, inline }
 
-/// A Material 3 wallet balance card inspired by fluxdo's `CdkBalanceCard`.
+/// A wallet balance card with gradient/compact/inline display modes.
 ///
-/// Supports three display modes:
 /// - `full` (default): Gradient card with decorative background, for wallet page
 /// - `compact`: Flat card with minimal styling, for profile/preview
 /// - `inline`: Row-only without card wrapper, for embedding in lists
+///
+/// Tapping opens [credit.yourtj.de] in the device browser.
 class WalletCard extends StatelessWidget {
   const WalletCard({
     super.key,
@@ -16,6 +19,7 @@ class WalletCard extends StatelessWidget {
     this.mode = WalletCardMode.full,
     this.label = '积分余额',
     this.icon,
+    this.dailyIncome,
     this.onTap,
     this.onRefresh,
     this.isLoading = false,
@@ -27,6 +31,7 @@ class WalletCard extends StatelessWidget {
   final WalletCardMode mode;
   final String label;
   final Widget? icon;
+  final int? dailyIncome;
   final VoidCallback? onTap;
   final VoidCallback? onRefresh;
   final bool isLoading;
@@ -35,10 +40,16 @@ class WalletCard extends StatelessWidget {
 
   // ── Full mode ─────────────────────────────────────────────────
 
+  void _openCreditUrl(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreditWebViewPage()),
+    );
+  }
+
   Widget _buildFull(BuildContext context, ThemeData theme) {
     final scheme = theme.colorScheme;
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap ?? () => _openCreditUrl(context),
       child: Card(
         elevation: 8,
         shadowColor: scheme.primary.withValues(alpha: 0.3),
@@ -48,7 +59,7 @@ class WalletCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [scheme.primary, scheme.secondary],
+              colors: [scheme.primary, scheme.tertiary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -79,8 +90,11 @@ class WalletCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: icon ??
-                              Image.asset('assets/images/app_logo.png',
-                                  width: 24, height: 24),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.asset('assets/images/app_logo.png',
+                                    width: 24, height: 24, fit: BoxFit.cover),
+                              ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -92,54 +106,117 @@ class WalletCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (isLoading)
-                          const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white70,
-                            ),
-                          )
-                        else if (onRefresh != null)
-                          GestureDetector(
-                            onTap: onRefresh,
-                            child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (onRefresh != null && !isLoading)
+                              GestureDetector(
+                                onTap: onRefresh,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.refresh_rounded,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
                               ),
-                              child: Icon(
-                                Icons.refresh_rounded,
+                            if (isLoading)
+                              const SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5, color: Colors.white70,
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.chevron_right_rounded,
                                 color: Colors.white.withValues(alpha: 0.7),
-                                size: 18,
+                                size: 22,
                               ),
-                            ),
-                          ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 24),
                     if (isError)
                       _buildErrorContent(theme)
                     else
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$balance',
-                            style: theme.textTheme.displaySmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              fontSize: 36,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '$balance',
+                                style: theme.textTheme.displaySmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  fontSize: 36,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '积分',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
+                          if (dailyIncome != null && dailyIncome! > 0) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.trending_up,
+                                    color: Colors.greenAccent,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '今日 +$dailyIncome',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Spacer(),
+                          Icon(Icons.touch_app_rounded,
+                              size: 12, color: Colors.white.withValues(alpha: 0.4)),
+                          const SizedBox(width: 4),
                           Text(
-                            '积分',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.7),
+                            '轻触进入',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 10,
                             ),
                           ),
                         ],
@@ -173,7 +250,7 @@ class WalletCard extends StatelessWidget {
       ),
       margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: onTap,
+        onTap: onTap ?? () => _openCreditUrl(context),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -215,6 +292,30 @@ class WalletCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (dailyIncome != null && dailyIncome! > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.trending_up_rounded, size: 14, color: scheme.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        '+$dailyIncome',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               if (isLoading)
                 const SizedBox(
                   width: 20,
@@ -238,7 +339,7 @@ class WalletCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: onTap ?? () => _openCreditUrl(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(

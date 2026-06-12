@@ -3,19 +3,71 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
 import 'api_error.dart';
+import '../../services/log_writer.dart';
 
 final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.fromEnv());
 
-final dioProvider = Provider<Dio>((ref) {
-  final config = ref.watch(appConfigProvider);
-  return Dio(
+Dio _createDio(String baseUrl) {
+  final dio = Dio(
     BaseOptions(
-      baseUrl: config.apiBaseUrl,
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 60),
       headers: const {'Accept': 'application/json'},
     ),
   );
+  final startTimes = <int, DateTime>{};
+  dio.interceptors.add(InterceptorsWrapper(
+    onRequest: (options, handler) {
+      final id = options.hashCode;
+      startTimes[id] = DateTime.now();
+      handler.next(options);
+    },
+    onResponse: (response, handler) {
+      final id = response.requestOptions.hashCode;
+      final start = startTimes.remove(id);
+      final ms = start != null ? DateTime.now().difference(start).inMilliseconds : 0;
+      LogWriter.instance.write({
+        'timestamp': DateTime.now().toIso8601String(),
+        'level': 'info',
+        'type': 'request',
+        'method': response.requestOptions.method,
+        'url': response.requestOptions.uri.toString(),
+        'statusCode': response.statusCode,
+        'duration': ms,
+        'message': '${response.requestOptions.method} ${response.statusCode} ${response.requestOptions.path}',
+      });
+      handler.next(response);
+    },
+    onError: (error, handler) {
+      final id = error.requestOptions.hashCode;
+      final start = startTimes.remove(id);
+      final ms = start != null ? DateTime.now().difference(start).inMilliseconds : 0;
+      LogWriter.instance.write({
+        'timestamp': DateTime.now().toIso8601String(),
+        'level': 'error',
+        'type': 'request',
+        'method': error.requestOptions.method,
+        'url': error.requestOptions.uri.toString(),
+        'statusCode': error.response?.statusCode,
+        'duration': ms,
+        'message': '${error.requestOptions.method} ${error.response?.statusCode ?? 'ERR'} ${error.requestOptions.path}',
+        'error': error.message,
+      });
+      handler.next(error);
+    },
+  ));
+  return dio;
+}
+
+final dioProvider = Provider<Dio>((ref) {
+  final config = ref.watch(appConfigProvider);
+  return _createDio(config.apiBaseUrl);
+});
+
+final creditDioProvider = Provider<Dio>((ref) {
+  final config = ref.watch(appConfigProvider);
+  return _createDio(config.creditApiBaseUrl);
 });
 
 class ApiClient {
@@ -26,6 +78,7 @@ class ApiClient {
   Future<T> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Map<String, String>? extraHeaders,
     required T Function(Object? json) decode,
     CancelToken? cancelToken,
   }) async {
@@ -33,6 +86,7 @@ class ApiClient {
       () => _dio.get<Object?>(
         path,
         queryParameters: queryParameters,
+        options: extraHeaders != null ? Options(headers: extraHeaders) : null,
         cancelToken: cancelToken,
       ),
     );
@@ -121,15 +175,3 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(ref.watch(dioProvider));
 });
 
-/// Separate Dio instance pointed at the credit/wallet API server.
-final creditDioProvider = Provider<Dio>((ref) {
-  final config = ref.watch(appConfigProvider);
-  return Dio(
-    BaseOptions(
-      baseUrl: config.creditApiBaseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
-      headers: const {'Accept': 'application/json'},
-    ),
-  );
-});

@@ -20,6 +20,7 @@ import '../../domain/repositories/review_repository.dart';
 import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
+import '../../shared/widgets/pending_edit_provider.dart';
 import '../../shared/widgets/rating_stars.dart';
 import '../../domain/repositories/local_review_store.dart';
 import 'course_detail_controller.dart';
@@ -41,6 +42,20 @@ class CourseDetailView extends ConsumerWidget {
     final controller = ref.read(
       courseDetailControllerProvider(courseId).notifier,
     );
+
+    // Auto-open edit sheet when navigating from profile's "再次编辑".
+    // Only fire when course detail data has loaded (prevents white overlay).
+    final pendingMap = ref.watch(pendingEditProvider);
+    final pendingEdit = pendingMap[courseId];
+    final detailReady = detail.hasValue && controller.currentDetail.id == courseId;
+    if (pendingEdit != null && detailReady) {
+      ref.read(pendingEditProvider.notifier).clear(courseId);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (context.mounted) {
+          _editReview(context, ref, controller, pendingEdit);
+        }
+      });
+    }
 
     return Scaffold(
       floatingActionButton: detail.hasValue
@@ -72,6 +87,7 @@ class CourseDetailView extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 12),
+                        // First row: rating + review count
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -86,12 +102,29 @@ class CourseDetailView extends ConsumerWidget {
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                             Text('${course.reviewCount} 条评价'),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        // Second row: department + credit
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
                             if (course.department.isNotEmpty)
-                              Chip(label: Text(course.department)),
+                              Chip(
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                label: Text(course.department,
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
                             if (course.credit > 0)
                               Chip(
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
                                 label: Text(
                                   '${course.credit.toStringAsFixed(1)} 学分',
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               ),
                           ],

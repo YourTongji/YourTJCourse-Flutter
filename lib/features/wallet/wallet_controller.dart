@@ -52,12 +52,23 @@ class WalletController extends AsyncNotifier<WalletState> {
       return const WalletState(userHash: '', balance: 0);
     }
 
-    // Fetch wallet, then summary in the background.
-    // Dart promotes savedHash/savedSecret/savedMnemonic to non-null
-    // because the if-block above checks and early-returns for null/empty.
-    final wallet = await _repository.fetchWallet(savedHash, cancelToken: cancelToken);
-    final summary = await _repository.fetchSummary(savedHash, cancelToken: cancelToken);
-    return WalletState(userHash: wallet.userHash, balance: wallet.balance, summary: summary);
+    // Fetch wallet balance from server. If it fails (e.g. credit API not
+    // available yet), still return the wallet state with hash so the page
+    // doesn't show "unregistered" — just show 0 balance until refresh.
+    WalletSummary? summary;
+    int balance = 0;
+    try {
+      final wallet = await _repository.fetchWallet(savedHash, cancelToken: cancelToken);
+      balance = wallet.balance;
+    } catch (_) {
+      // Server fetch failed — user can pull-to-refresh later.
+    }
+    try {
+      summary = await _repository.fetchSummary(savedHash, cancelToken: cancelToken);
+    } catch (_) {
+      // Summary is optional.
+    }
+    return WalletState(userHash: savedHash, balance: balance, summary: summary);
   }
 
   /// Persist wallet credentials to secure storage (called after register/restore).

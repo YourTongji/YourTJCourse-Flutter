@@ -5,6 +5,8 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../models/json_helpers.dart';
 import '../models/report_reason.dart';
+import '../models/review.dart';
+import 'local_review_store.dart';
 
 final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
   return ReviewRepository(ref.watch(apiClientProvider));
@@ -70,6 +72,7 @@ class ReviewRepository {
     required String captchaToken,
     String? reviewerName,
     String? reviewerAvatar,
+    String? walletUserHash,
     CancelToken? cancelToken,
   }) {
     return _client.post(
@@ -84,6 +87,8 @@ class ReviewRepository {
           'reviewer_name': reviewerName.trim(),
         if (reviewerAvatar != null && reviewerAvatar.trim().isNotEmpty)
           'reviewer_avatar': reviewerAvatar.trim(),
+        if (walletUserHash != null && walletUserHash.trim().isNotEmpty)
+          'walletUserHash': walletUserHash.trim(),
       },
       cancelToken: cancelToken,
       decode: CreateReviewResponse.fromJson,
@@ -121,6 +126,39 @@ class ReviewRepository {
       cancelToken: cancelToken,
       decode: UpdateReviewResponse.fromJson,
     );
+  }
+
+  /// Fetch reviews belonging to a wallet address.
+  Future<List<LocalReviewEntry>> fetchWalletReviews(
+    String userHash, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _client.get<List<LocalReviewEntry>>(
+      '/api/review/by-wallet/$userHash',
+      queryParameters: {'limit': '50'},
+      cancelToken: cancelToken,
+      decode: (json) {
+        if (json is! Map) return <LocalReviewEntry>[];
+        // Serverless returns {reviews: [...], pagination: {...}}
+        final reviews = json['reviews'];
+        if (reviews is! List) return <LocalReviewEntry>[];
+        return reviews.map((item) {
+          final map = asJsonMap(item);
+          final review = Review.fromJson(item);
+          return LocalReviewEntry(
+            courseId: review.courseId,
+            courseName: readString(map['course_name']) ?? '',
+            courseCode: readString(map['course_code']) ?? '',
+            teacherName: readString(map['teacher_name']) ?? '',
+            courseRating: readDouble(map['course_rating']) ?? 0,
+            reviewCount: readInt(map['review_count']) ?? 0,
+            review: review,
+            savedAt: review.createdAt,
+          );
+        }).toList(growable: false);
+      },
+    );
+    return response;
   }
 }
 

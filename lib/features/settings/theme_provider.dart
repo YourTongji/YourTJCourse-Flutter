@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// YTJ preset colors matching fluxdo preset.
+/// YTJ preset colors.
 const ytjPresetColors = <Color>[
   Color(0xFF036099),
   Color(0xFF6C63FF),
@@ -18,7 +18,7 @@ const ytjPresetColors = <Color>[
   Color(0xFF00838F),
 ];
 
-/// App Theme State — matches fluxdo's ThemeState.
+/// App Theme State.
 class ThemeState {
   final ThemeMode mode;
   final Color seedColor;
@@ -58,7 +58,7 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('Override SharedPreferences in ProviderScope');
 });
 
-/// Theme provider — matches fluxdo's `StateNotifierProvider<ThemeNotifier, ThemeState>`.
+/// Theme provider — `StateNotifierProvider<ThemeNotifier, ThemeState>`.
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return ThemeNotifier(prefs);

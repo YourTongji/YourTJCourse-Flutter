@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app_logs_page.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
@@ -83,10 +85,17 @@ class SettingsView extends ConsumerWidget {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
-            title: const Text('主题与钱包'),
-            subtitle: const Text('切换主题色、深浅模式、钱包退出'),
+            title: const Text('外观设置'),
             trailing: const Icon(Icons.chevron_right, size: 18),
             onTap: () => context.push('/theme-settings'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.article_outlined),
+            title: const Text('应用日志'),
+            trailing: const Icon(Icons.chevron_right, size: 18),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AppLogsPage()),
+            ),
           ),
           const Divider(),
           ListTile(
@@ -116,14 +125,12 @@ class SettingsView extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.policy_outlined),
             title: const Text('社区规范'),
-            subtitle: const Text('评价支持隐藏与举报，请保持真实、克制和可验证'),
             onTap: () =>
                 _showTextSheet(context, '社区规范', _communityGuidelinesText),
           ),
           ListTile(
             leading: const Icon(Icons.security_outlined),
             title: const Text('安全与合规'),
-            subtitle: const Text('Release 默认 HTTPS，评价提供举报与隐藏入口'),
             onTap: () => _showTextSheet(context, '安全与合规', _safetyText),
           ),
           ListTile(

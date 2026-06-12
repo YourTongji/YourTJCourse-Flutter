@@ -10,7 +10,9 @@ import 'features/catalog/catalog_view.dart';
 import 'features/announcements/announcement_controller.dart';
 import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
+import 'features/maintenance/maintenance_gate.dart';
 import 'features/profile/profile_view.dart';
+import 'services/log_writer.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'features/settings/theme_provider.dart';
@@ -25,6 +27,14 @@ import 'domain/models/runtime_state.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(isOptional: true);
+  await LogWriter.init();
+  LogWriter.instance.write({
+    'timestamp': DateTime.now().toIso8601String(),
+    'level': 'info',
+    'type': 'lifecycle',
+    'event': 'app_start',
+    'message': '应用启动',
+  });
   final prefs = await SharedPreferences.getInstance();
   runApp(
     ProviderScope(
@@ -34,20 +44,32 @@ Future<void> main() async {
   );
 }
 
+/// Cache theme data to prevent full widget tree rebuild on theme switch.
+final _themeCache = <(int, int, int), ThemeData>{};
+
 class YourTJCourseApp extends ConsumerWidget {
   const YourTJCourseApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
+
+    // Build a cache key from the inputs so matching seeds + variants
+    // return the same ThemeData object. This prevents MaterialApp from
+    // rebuilding the full widget tree when only themeMode changes.
     final seed = themeState.useDynamicColor
         ? LkcnColors.primary
         : themeState.seedColor;
+    final variant = themeState.schemeVariant;
+
+    final lightKey = (seed.toARGB32(), Brightness.light.index, variant.index);
+    final darkKey = (seed.toARGB32(), Brightness.dark.index, variant.index);
+
     return MaterialApp.router(
       title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light, seed, themeState.schemeVariant),
-      darkTheme: _buildTheme(Brightness.dark, seed, themeState.schemeVariant),
+      theme: _themeCache.putIfAbsent(lightKey, () => _buildTheme(Brightness.light, seed, variant)),
+      darkTheme: _themeCache.putIfAbsent(darkKey, () => _buildTheme(Brightness.dark, seed, variant)),
       themeMode: themeState.mode,
       routerConfig: _router,
     );
@@ -208,11 +230,13 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AnnouncementGate(
-      child: AutoUpdateGate(
-        child: _SplashGate(
-          child: Scaffold(
-            body: navigationShell,
+    return Consumer(builder: (context, ref, _) {
+      return _AnnouncementGate(
+        child: MaintenanceGate(
+          child: AutoUpdateGate(
+            child: _SplashGate(
+              child: Scaffold(
+                body: navigationShell,
             bottomNavigationBar: _AppNavigationBar(
               active: navigationShell.currentIndex,
               onChange: (index) {
@@ -225,7 +249,9 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
+    });
   }
 }
 
