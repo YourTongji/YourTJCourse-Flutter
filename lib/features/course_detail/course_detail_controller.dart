@@ -362,13 +362,13 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
 
   /// Claim credit reward by setting the edit token after review creation.
   Future<void> _claimCreditReward(int reviewId) async {
-    final creds = await ref.read(walletProvider.notifier).loadCredentials();
-    if (creds == null) return;
-    final token = HmacHelper.editToken(
-      reviewId: reviewId,
-      userSecret: creds.userSecret,
-    );
     try {
+      final creds = await ref.read(walletProvider.notifier).loadCredentials();
+      if (creds == null) return;
+      final token = HmacHelper.editToken(
+        reviewId: reviewId,
+        userSecret: creds.userSecret,
+      );
       await ref.read(walletRepositoryProvider).setEditToken(
         reviewId: reviewId,
         editToken: token,
@@ -391,13 +391,14 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
     try {
       final creds = await ref.read(walletProvider.notifier).loadCredentials();
 
-      // Attempt to claim edit token if not yet set (fire-and-forget).
+      // Compute edit token once; use for both setEditToken and updateReview.
+      String? editToken;
       if (creds != null) {
-        final token = HmacHelper.editToken(reviewId: reviewId, userSecret: creds.userSecret);
+        editToken = HmacHelper.editToken(reviewId: reviewId, userSecret: creds.userSecret);
         try {
           await ref.read(walletRepositoryProvider).setEditToken(
             reviewId: reviewId,
-            editToken: token,
+            editToken: editToken,
             walletUserHash: creds.userHash,
           );
         } catch (_) {
@@ -411,13 +412,7 @@ class CourseDetailController extends AsyncNotifier<CourseDetailState> {
         comment: comment,
         semester: semester,
         captchaToken: captchaToken,
-        editToken:
-            creds != null
-                ? HmacHelper.editToken(
-                    reviewId: reviewId,
-                    userSecret: creds.userSecret,
-                  )
-                : null,
+        editToken: editToken,
         walletUserHash: creds?.userHash,
         reviewerName: reviewerName,
         reviewerAvatar: reviewerAvatar,

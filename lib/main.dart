@@ -14,6 +14,7 @@ import 'features/maintenance/maintenance_gate.dart';
 import 'features/profile/profile_view.dart';
 import 'services/log_writer.dart';
 import 'features/scheduler/scheduler_view.dart';
+import 'features/settings/app_logs_page.dart';
 import 'features/settings/settings_view.dart';
 import 'features/settings/theme_provider.dart';
 import 'features/settings/theme_settings_view.dart';
@@ -204,6 +205,11 @@ final _router = GoRouter(
       path: '/theme-settings',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const ThemeSettingsView(),
+    ),
+    GoRoute(
+      path: '/app-logs',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const AppLogsPage(),
     ),
     GoRoute(
       path: '/wallet',

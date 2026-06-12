@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'app_logs_page.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
@@ -93,9 +92,7 @@ class SettingsView extends ConsumerWidget {
             leading: const Icon(Icons.article_outlined),
             title: const Text('应用日志'),
             trailing: const Icon(Icons.chevron_right, size: 18),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AppLogsPage()),
-            ),
+            onTap: () => context.push('/app-logs'),
           ),
           const Divider(),
           ListTile(

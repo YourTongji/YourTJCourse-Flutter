@@ -26,10 +26,8 @@ final _walletReviewsProvider = FutureProvider<List<LocalReviewEntry>>(
     if (userHash == null || userHash.isEmpty) return [];
     try {
       final reviews = await ref.read(reviewRepositoryProvider).fetchWalletReviews(userHash);
-      debugPrint('[WalletReviews] fetched ${reviews.length} reviews for $userHash');
       return reviews;
-    } catch (e) {
-      debugPrint('[WalletReviews] error: $e');
+    } catch (_) {
       return [];
     }
   },

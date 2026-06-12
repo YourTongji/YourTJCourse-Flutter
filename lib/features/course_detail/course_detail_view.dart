@@ -49,10 +49,10 @@ class CourseDetailView extends ConsumerWidget {
     final pendingEdit = pendingMap[courseId];
     final detailReady = detail.hasValue && controller.currentDetail.id == courseId;
     if (pendingEdit != null && detailReady) {
-      ref.read(pendingEditProvider.notifier).clear(courseId);
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           _editReview(context, ref, controller, pendingEdit);
+          ref.read(pendingEditProvider.notifier).clear(courseId);
         }
       });
     }
@@ -71,6 +71,7 @@ class CourseDetailView extends ConsumerWidget {
             ErrorState(message: error.toString(), onRetry: controller.refresh),
         data: (state) {
           final course = state.detail;
+          final ownedIds = ref.watch(_ownedReviewIdsProvider).value ?? {};
           return RefreshIndicator(
             onRefresh: controller.refresh,
             child: CustomScrollView(
@@ -172,8 +173,6 @@ class CourseDetailView extends ConsumerWidget {
                     itemCount: state.visibleReviews.length,
                     itemBuilder: (context, index) {
                       final review = state.visibleReviews[index];
-                      final ownedIds = ref.watch(_ownedReviewIdsProvider)
-                          .value ?? {};
                       final isOwn = ownedIds.contains(review.id);
                       return ReviewCard(
                         course: course,
