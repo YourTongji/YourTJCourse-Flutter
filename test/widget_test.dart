@@ -19,16 +19,21 @@ import 'package:yourtjcourse_flutter/main.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_view.dart';
+import 'package:yourtjcourse_flutter/features/settings/theme_provider.dart';
 
 void main() {
-  setUp(() {
+  late SharedPreferences _prefs;
+
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    _prefs = await SharedPreferences.getInstance();
   });
 
   testWidgets('renders app shell', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(_prefs),
           announcementControllerProvider.overrideWith(() {
             return _NoAnnouncementController();
           }),

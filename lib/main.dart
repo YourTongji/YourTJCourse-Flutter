@@ -15,6 +15,7 @@ import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/settings_view.dart';
 import 'features/settings/theme_provider.dart';
 import 'features/settings/theme_settings_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'features/update/auto_update_gate.dart';
 import 'features/wallet/transaction_history_view.dart';
 import 'features/wallet/wallet_registration_view.dart';
@@ -24,7 +25,13 @@ import 'domain/models/runtime_state.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(isOptional: true);
-  runApp(const ProviderScope(child: YourTJCourseApp()));
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const YourTJCourseApp(),
+    ),
+  );
 }
 
 class YourTJCourseApp extends ConsumerWidget {
@@ -32,24 +39,26 @@ class YourTJCourseApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeState = ref.watch(themeStateProvider).value;
-    final seedColor = themeState?.seedColor ?? LkcnColors.primary;
-    final themeMode = themeState?.mode ?? ThemeMode.system;
+    final themeState = ref.watch(themeProvider);
+    final seed = themeState.useDynamicColor
+        ? LkcnColors.primary
+        : themeState.seedColor;
     return MaterialApp.router(
       title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light, seedColor),
-      darkTheme: _buildTheme(Brightness.dark, seedColor),
-      themeMode: themeMode,
+      theme: _buildTheme(Brightness.light, seed, themeState.schemeVariant),
+      darkTheme: _buildTheme(Brightness.dark, seed, themeState.schemeVariant),
+      themeMode: themeState.mode,
       routerConfig: _router,
     );
   }
 }
 
-ThemeData _buildTheme(Brightness brightness, [Color? seedColor]) {
+ThemeData _buildTheme(Brightness brightness, Color seed, [DynamicSchemeVariant? variant]) {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: seedColor ?? LkcnColors.primary,
+    seedColor: seed,
     brightness: brightness,
+    dynamicSchemeVariant: variant ?? DynamicSchemeVariant.tonalSpot,
   );
   return ThemeData(
     useMaterial3: true,

@@ -5,25 +5,22 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../wallet/wallet_controller.dart';
 import 'theme_provider.dart';
 
-/// Theme color + wallet settings page.
+/// Full theme + wallet settings matching fluxdo's appearance page layout.
 class ThemeSettingsView extends ConsumerWidget {
   const ThemeSettingsView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeState = ref.watch(themeStateProvider).value ??
-        const ThemeState(mode: ThemeMode.system, seedColor: Color(0xFF036099));
+    final themeState = ref.watch(themeProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('主题与钱包')),
+      appBar: AppBar(title: const Text('外观与钱包')),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
-          // ── Theme mode ─────────────────────────────────
-          Text('显示模式', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+          _SectionHeader(title: '主题模式', icon: Icons.brightness_6_outlined),
           Card(
             child: Column(
               children: [
@@ -31,28 +28,26 @@ class ThemeSettingsView extends ConsumerWidget {
                   label: '跟随系统',
                   icon: Icons.brightness_auto_rounded,
                   selected: themeState.mode == ThemeMode.system,
-                  onTap: () => ref.read(themeStateProvider.notifier).setMode(ThemeMode.system),
+                  onTap: () => ref.read(themeProvider.notifier).setThemeMode(ThemeMode.system),
                 ),
                 _ModeTile(
                   label: '浅色',
                   icon: Icons.light_mode_rounded,
                   selected: themeState.mode == ThemeMode.light,
-                  onTap: () => ref.read(themeStateProvider.notifier).setMode(ThemeMode.light),
+                  onTap: () => ref.read(themeProvider.notifier).setThemeMode(ThemeMode.light),
                 ),
                 _ModeTile(
                   label: '深色',
                   icon: Icons.dark_mode_rounded,
                   selected: themeState.mode == ThemeMode.dark,
-                  onTap: () => ref.read(themeStateProvider.notifier).setMode(ThemeMode.dark),
+                  onTap: () => ref.read(themeProvider.notifier).setThemeMode(ThemeMode.dark),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Seed color ─────────────────────────────────
-          Text('主题色', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+          _SectionHeader(title: '主题色', icon: Icons.palette_outlined),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -60,12 +55,11 @@ class ThemeSettingsView extends ConsumerWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: ytjPresetColors.map((color) {
-                  final isSelected = color.toARGB32() == (themeState.seedColor.toARGB32());
+                  final isSelected = color.toARGB32() == themeState.seedColor.toARGB32();
                   return GestureDetector(
-                    onTap: () => ref.read(themeStateProvider.notifier).setSeedColor(color),
+                    onTap: () => ref.read(themeProvider.notifier).setSeedColor(color),
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      width: 44, height: 44,
                       decoration: BoxDecoration(
                         color: color,
                         shape: BoxShape.circle,
@@ -85,30 +79,51 @@ class ThemeSettingsView extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
 
-          // ── Wallet section ─────────────────────────────
-          Text('钱包', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+          _SectionHeader(title: '动态取色', icon: Icons.gradient_outlined),
+          SwitchListTile(
+            title: const Text('使用系统动态颜色'),
+            subtitle: const Text('开启后自动跟随系统壁纸取色'),
+            value: themeState.useDynamicColor,
+            onChanged: (v) => ref.read(themeProvider.notifier).setUseDynamicColor(v),
+          ),
+          const SizedBox(height: 20),
+
+          _SectionHeader(title: '色调变体', icon: Icons.color_lens_outlined),
           Card(
             child: Column(
-              children: [
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: scheme.errorContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.logout_rounded, color: scheme.error, size: 20),
-                  ),
-                  title: const Text('退出钱包'),
-                  subtitle: const Text('清除本地钱包凭证'),
-                  onTap: () => _confirmLogout(context, ref),
-                ),
-              ],
+              children: DynamicSchemeVariant.values.map((variant) {
+                return RadioListTile<DynamicSchemeVariant>(
+                  title: Text(_variantLabel(variant)),
+                  value: variant,
+                  groupValue: themeState.schemeVariant,
+                  onChanged: (v) {
+                    if (v != null) ref.read(themeProvider.notifier).setSchemeVariant(v);
+                  },
+                );
+              }).toList(),
             ),
           ),
+          const SizedBox(height: 28),
+
+          _SectionHeader(title: '钱包', icon: Icons.account_balance_wallet_outlined),
+          Card(
+            child: ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.logout_rounded, color: scheme.error, size: 20),
+              ),
+              title: const Text('退出钱包'),
+              subtitle: const Text('清除本地凭证，可用助记词恢复'),
+              onTap: () => _confirmLogout(context, ref),
+            ),
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -128,7 +143,6 @@ class ThemeSettingsView extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    // Clear stored credentials.
     const storage = FlutterSecureStorage();
     await storage.delete(key: 'de.yourtj.course.wallet.mnemonic');
     await storage.delete(key: 'de.yourtj.course.wallet.userHash');
@@ -136,20 +150,48 @@ class ThemeSettingsView extends ConsumerWidget {
 
     ref.invalidate(walletProvider);
   }
+
+  String _variantLabel(DynamicSchemeVariant v) => switch (v) {
+    DynamicSchemeVariant.tonalSpot => 'Tonal Spot（默认）',
+    DynamicSchemeVariant.fidelity => 'Fidelity（忠实）',
+    DynamicSchemeVariant.monochrome => 'Monochrome（单色）',
+    DynamicSchemeVariant.neutral => 'Neutral（中性）',
+    DynamicSchemeVariant.vibrant => 'Vibrant（鲜艳）',
+    DynamicSchemeVariant.expressive => 'Expressive（表现力）',
+    DynamicSchemeVariant.content => 'Content（内容）',
+    DynamicSchemeVariant.rainbow => 'Rainbow（彩虹）',
+    DynamicSchemeVariant.fruitSalad => 'Fruit Salad（水果沙拉）',
+  };
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  const _SectionHeader({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
 }
 
 class _ModeTile extends StatelessWidget {
-  const _ModeTile({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  const _ModeTile({required this.label, required this.icon, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
