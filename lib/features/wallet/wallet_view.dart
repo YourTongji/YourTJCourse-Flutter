@@ -469,7 +469,9 @@ class _BenefitRow extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: scheme.onSurfaceVariant),
           const SizedBox(width: 6),
-          Text(text, style: Theme.of(context).textTheme.bodySmall),
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodySmall, softWrap: true),
+          ),
         ],
       ),
     );

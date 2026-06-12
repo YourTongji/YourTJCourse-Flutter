@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -227,14 +228,19 @@ class _WalletRegistrationViewState
       final repo = ref.read(walletRepositoryProvider);
       try {
         await repo.fetchWallet(result.userHash);
-      } catch (_) {
-        await repo.registerWallet(
-          WalletCredentials(
-            mnemonic: result.mnemonic,
-            userHash: result.userHash,
-            userSecret: result.userSecret,
-          ),
-        );
+      } catch (e) {
+        // Only auto-register on confirmed not-found (404).
+        if (e is DioException && e.response?.statusCode == 404) {
+          await repo.registerWallet(
+            WalletCredentials(
+              mnemonic: result.mnemonic,
+              userHash: result.userHash,
+              userSecret: result.userSecret,
+            ),
+          );
+        } else {
+          rethrow;
+        }
       }
 
       await ref.read(walletProvider.notifier).persistCredentials(

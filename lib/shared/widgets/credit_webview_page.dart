@@ -21,7 +21,7 @@ Future<void> clearCreditStorage() async {
   try {
     // 1) Clear cookies immediately.
     final cookieManager = CookieManager.instance();
-    await cookieManager.deleteAllCookies();
+    await cookieManager.deleteCookies(url: WebUri('https://credit.yourtj.de'));
 
     // 2) Clear localStorage via headless WebView.
     final headless = HeadlessInAppWebView(
@@ -96,16 +96,17 @@ class _CreditWebViewPageState extends State<CreditWebViewPage> {
   /// UserScript: inject wallet credentials into localStorage at document start,
   /// BEFORE the React app's useState(loadWallet()) runs.
   UnmodifiableListView<UserScript>? get _injectScript {
+    final m = _mnemonic;
     final h = _hash;
     final s = _secret;
-    if (h == null || h.isEmpty || s == null || s.isEmpty) return null;
+    if (m == null || m.isEmpty || h == null || h.isEmpty || s == null || s.isEmpty) return null;
     return UnmodifiableListView([
       UserScript(
         source: '''
 (function() {
   try {
     localStorage.setItem('yourtj_credit_wallet', JSON.stringify({
-      mnemonic: ${jsonEncode(_mnemonic ?? '')},
+      mnemonic: ${jsonEncode(m)},
       userHash: ${jsonEncode(h)},
       userSecret: ${jsonEncode(s)},
       createdAt: Date.now()
@@ -330,6 +331,15 @@ class _CreditWebViewPageState extends State<CreditWebViewPage> {
                         });
                       },
                       onPermissionRequest: (ctrl, request) async {
+                        final hasNonCamera = request.resources.any(
+                          (r) => r != PermissionResourceType.CAMERA,
+                        );
+                        if (hasNonCamera) {
+                          return PermissionResponse(
+                            resources: request.resources,
+                            action: PermissionResponseAction.DENY,
+                          );
+                        }
                         final needsCamera = request.resources.any(
                           (r) => r == PermissionResourceType.CAMERA,
                         );
@@ -343,7 +353,7 @@ class _CreditWebViewPageState extends State<CreditWebViewPage> {
                           }
                         }
                         return PermissionResponse(
-                          resources: request.resources,
+                          resources: [PermissionResourceType.CAMERA],
                           action: PermissionResponseAction.GRANT,
                         );
                       },

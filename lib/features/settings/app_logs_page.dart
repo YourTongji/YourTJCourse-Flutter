@@ -64,7 +64,15 @@ class _AppLogsPageState extends State<AppLogsPage> {
         ],
       ),
     );
-    if (ok == true) { await LoggerUtils.clearLogs(); await _loadLogs(); _toast('日志已清除'); }
+    if (ok == true) {
+      try {
+        await LoggerUtils.clearLogs();
+        if (mounted) await _loadLogs();
+        if (mounted) _toast('日志已清除');
+      } catch (_) {
+        if (mounted) _toast('清除失败');
+      }
+    }
   }
 
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
