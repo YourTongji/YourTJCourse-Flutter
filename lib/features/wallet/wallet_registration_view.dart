@@ -196,12 +196,10 @@ class _WalletRegistrationViewState
         // Invalidate wallet provider so the parent /wallet page picks up
         // the freshly saved credentials when it re-renders.
         ref.invalidate(walletProvider);
-        // Small delay to let Riverpod settle invalidation before navigation,
-        // preventing a black screen from stale/loading provider state.
+        // Navigate to /wallet via GoRouter pushReplacement to avoid the
+        // Bad state: No element crash from double-pop on GoRouter.
         await Future.delayed(const Duration(milliseconds: 50));
-        // Pop back to parent /wallet route (already in the stack) instead of
-        // pushing a new one, which caused double-return needed.
-        if (mounted) context.pop();
+        if (mounted) context.pushReplacement('/wallet');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
