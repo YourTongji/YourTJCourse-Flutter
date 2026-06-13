@@ -196,10 +196,11 @@ class _WalletRegistrationViewState
         // Invalidate wallet provider so the parent /wallet page picks up
         // the freshly saved credentials when it re-renders.
         ref.invalidate(walletProvider);
-        // Navigate to /wallet via GoRouter pushReplacement to avoid the
-        // Bad state: No element crash from double-pop on GoRouter.
-        await Future.delayed(const Duration(milliseconds: 50));
-        if (mounted) context.pushReplacement('/wallet');
+        // Navigate to /wallet via GoRouter pushReplacement in the next frame
+        // to avoid race conditions and the Bad state: No element crash.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.pushReplacement('/wallet');
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);

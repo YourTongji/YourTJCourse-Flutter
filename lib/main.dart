@@ -44,16 +44,23 @@ Future<void> main() async {
     );
   };
 
-  runZonedGuarded(() {
-    final prefs = SharedPreferences.getInstance();
-    prefs.then((prefs) {
-      runApp(
-        ProviderScope(
-          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-          child: const YourTJCourseApp(),
-        ),
-      );
+  runZonedGuarded(() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    LogWriter.instance.write({
+      'timestamp': DateTime.now().toIso8601String(),
+      'level': 'info',
+      'type': 'lifecycle',
+      'event': 'app_start',
+      'message': '应用启动',
     });
+
+    runApp(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: const YourTJCourseApp(),
+      ),
+    );
   }, (Object error, StackTrace stack) {
     AppLogger.error(
       '未捕获的异步异常',
@@ -61,14 +68,6 @@ Future<void> main() async {
       stackTrace: stack,
       tag: 'Uncaught',
     );
-  });
-
-  LogWriter.instance.write({
-    'timestamp': DateTime.now().toIso8601String(),
-    'level': 'info',
-    'type': 'lifecycle',
-    'event': 'app_start',
-    'message': '应用启动',
   });
 }
 
