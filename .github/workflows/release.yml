@@ -117,6 +117,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Patch flutter_inappwebview_android proguard file for AGP 9.x
+        run: |
+          INJECTION='getDefaultProguardFile("proguard-android-optimize.txt")'
+          FILE="$PUB_CACHE/hosted/pub.dev/flutter_inappwebview_android-1.1.3/android/build.gradle"
+          if [ -f "$FILE" ] && grep -q "proguard-android.txt" "$FILE"; then
+            sed -i "s|getDefaultProguardFile('proguard-android.txt')|$INJECTION|g" "$FILE"
+            echo "Patched $FILE"
+          else
+            echo "Plugin build.gradle not found or already patched — skipping"
+          fi
+
       - name: Build release APKs
         run: flutter build apk --release --split-per-abi --dart-define=APP_BUILD_SHA=$GITHUB_SHA
 

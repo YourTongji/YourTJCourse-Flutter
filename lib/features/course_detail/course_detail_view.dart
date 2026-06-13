@@ -20,8 +20,16 @@ import '../../domain/repositories/review_repository.dart';
 import '../../shared/markdown/review_markdown.dart';
 import '../../shared/widgets/app_states.dart';
 import '../../shared/widgets/course_card.dart';
+import '../../shared/widgets/pending_edit_provider.dart';
 import '../../shared/widgets/rating_stars.dart';
+import '../../domain/repositories/local_review_store.dart';
 import 'course_detail_controller.dart';
+
+/// Set of locally-created review IDs (owned by this device).
+final _ownedReviewIdsProvider = FutureProvider<Set<int>>((ref) async {
+  final mine = await ref.watch(localReviewStoreProvider).loadMine();
+  return mine.map((e) => e.review.id).toSet();
+});
 
 class CourseDetailView extends ConsumerWidget {
   const CourseDetailView({super.key, required this.courseId});
@@ -34,6 +42,20 @@ class CourseDetailView extends ConsumerWidget {
     final controller = ref.read(
       courseDetailControllerProvider(courseId).notifier,
     );
+
+    // Auto-open edit sheet when navigating from profile's "再次编辑".
+    // Only fire when course detail data has loaded (prevents white overlay).
+    final pendingMap = ref.watch(pendingEditProvider);
+    final pendingEdit = pendingMap[courseId];
+    final detailReady = detail.hasValue && controller.currentDetail.id == courseId;
+    if (pendingEdit != null && detailReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          _editReview(context, ref, controller, pendingEdit);
+          ref.read(pendingEditProvider.notifier).clear(courseId);
+        }
+      });
+    }
 
     return Scaffold(
       floatingActionButton: detail.hasValue
@@ -49,6 +71,7 @@ class CourseDetailView extends ConsumerWidget {
             ErrorState(message: error.toString(), onRetry: controller.refresh),
         data: (state) {
           final course = state.detail;
+          final ownedIds = ref.watch(_ownedReviewIdsProvider).value ?? {};
           return RefreshIndicator(
             onRefresh: controller.refresh,
             child: CustomScrollView(
@@ -65,6 +88,7 @@ class CourseDetailView extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 12),
+                        // First row: rating + review count
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -79,12 +103,29 @@ class CourseDetailView extends ConsumerWidget {
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                             Text('${course.reviewCount} 条评价'),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        // Second row: department + credit
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
                             if (course.department.isNotEmpty)
-                              Chip(label: Text(course.department)),
+                              Chip(
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                label: Text(course.department,
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
                             if (course.credit > 0)
                               Chip(
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
                                 label: Text(
                                   '${course.credit.toStringAsFixed(1)} 学分',
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               ),
                           ],
@@ -132,15 +173,20 @@ class CourseDetailView extends ConsumerWidget {
                     itemCount: state.visibleReviews.length,
                     itemBuilder: (context, index) {
                       final review = state.visibleReviews[index];
+                      final isOwn = ownedIds.contains(review.id);
                       return ReviewCard(
                         course: course,
                         review: review,
+                        isOwnReview: isOwn,
                         favorited: state.favoriteReviewIds.contains(review.id),
                         onLike: () => controller.toggleLike(review.id),
                         onHide: () => controller.hideReview(review.id),
                         onFavorite: () => controller.toggleFavorite(review.id),
                         onReport: () =>
                             _showReportSheet(context, controller, review.id),
+                        onEdit: isOwn
+                            ? () => _editReview(context, ref, controller, review)
+                            : null,
                       );
                     },
                   ),
@@ -213,6 +259,25 @@ class CourseDetailView extends ConsumerWidget {
     );
   }
 
+  void _editReview(
+    BuildContext context,
+    WidgetRef ref,
+    CourseDetailController controller,
+    Review review,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => _ReviewComposeSheet(
+        course: controller.currentDetail,
+        controller: controller,
+        captchaRepository: ref.read(captchaRepositoryProvider),
+        editReview: review,
+      ),
+    );
+  }
+
   void _showReviewSheet(
     BuildContext context,
     WidgetRef ref,
@@ -236,11 +301,13 @@ class _ReviewComposeSheet extends StatefulWidget {
     required this.course,
     required this.controller,
     required this.captchaRepository,
+    this.editReview,
   });
 
   final CourseDetail course;
   final CourseDetailController controller;
   final CaptchaRepository captchaRepository;
+  final Review? editReview;
 
   @override
   State<_ReviewComposeSheet> createState() => _ReviewComposeSheetState();
@@ -259,7 +326,18 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
   @override
   void initState() {
     super.initState();
-    _semester = _semesterOptions.first;
+    final edit = widget.editReview;
+    if (edit != null) {
+      _commentController.text = edit.comment;
+      _rating = edit.rating;
+      _semester = edit.semester.isNotEmpty ? edit.semester : _semesterOptions.first;
+      if (edit.reviewerName?.isNotEmpty ?? false) {
+        _nameController.text = edit.reviewerName!;
+        _showReviewer = true;
+      }
+    } else {
+      _semester = _semesterOptions.first;
+    }
   }
 
   @override
@@ -456,14 +534,25 @@ class _ReviewComposeSheetState extends State<_ReviewComposeSheet> {
     setState(() => _isSubmitting = true);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await widget.controller.createReview(
-      rating: _rating,
-      comment: _commentController.text.trim(),
-      semester: _semester,
-      captchaToken: captchaToken,
-      reviewerName: _showReviewer ? _nameController.text.trim() : null,
-      reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
-    );
+    final edit = widget.editReview;
+    final ok = edit != null
+        ? await widget.controller.updateReview(
+            reviewId: edit.id,
+            rating: _rating,
+            comment: _commentController.text.trim(),
+            semester: _semester,
+            captchaToken: captchaToken,
+            reviewerName: _showReviewer ? _nameController.text.trim() : null,
+            reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
+          )
+        : await widget.controller.createReview(
+            rating: _rating,
+            comment: _commentController.text.trim(),
+            semester: _semester,
+            captchaToken: captchaToken,
+            reviewerName: _showReviewer ? _nameController.text.trim() : null,
+            reviewerAvatar: _showReviewer ? _reviewerAvatar : null,
+          );
     if (!mounted) return;
     setState(() => _isSubmitting = false);
     if (ok) {
@@ -1159,20 +1248,24 @@ class ReviewCard extends StatelessWidget {
     super.key,
     required this.course,
     required this.review,
+    this.isOwnReview = false,
     required this.favorited,
     required this.onLike,
     required this.onHide,
     required this.onFavorite,
     required this.onReport,
+    this.onEdit,
   });
 
   final CourseDetail course;
   final Review review;
+  final bool isOwnReview;
   final bool favorited;
   final VoidCallback onLike;
   final VoidCallback onHide;
   final VoidCallback onFavorite;
   final VoidCallback onReport;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1212,11 +1305,15 @@ class ReviewCard extends StatelessWidget {
                         review: review,
                       );
                     }
+                    if (value == 'edit') onEdit?.call();
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'share', child: Text('生成分享图')),
-                    PopupMenuItem(value: 'hide', child: Text('隐藏')),
-                    PopupMenuItem(value: 'report', child: Text('举报')),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'share', child: Text('生成分享图')),
+                    const PopupMenuItem(value: 'hide', child: Text('隐藏')),
+                    const PopupMenuItem(value: 'report', child: Text('举报')),
+                    // 仅自己的评价显示编辑选项
+                    if (isOwnReview)
+                      const PopupMenuItem(value: 'edit', child: Text('编辑')),
                   ],
                 ),
               ],
@@ -1256,6 +1353,21 @@ class ReviewCard extends StatelessWidget {
                   label: const Text('分享图'),
                 ),
               ],
+            ),
+            // ── Bottom row: sqid ──────────────────────────
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '#${review.sqid}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

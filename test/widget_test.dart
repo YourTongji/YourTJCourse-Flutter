@@ -19,16 +19,21 @@ import 'package:yourtjcourse_flutter/main.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_models.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_repository.dart';
 import 'package:yourtjcourse_flutter/features/scheduler/scheduler_view.dart';
+import 'package:yourtjcourse_flutter/features/settings/theme_provider.dart';
 
 void main() {
-  setUp(() {
+  late SharedPreferences prefs;
+
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
   });
 
   testWidgets('renders app shell', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           announcementControllerProvider.overrideWith(() {
             return _NoAnnouncementController();
           }),
@@ -42,6 +47,9 @@ void main() {
     expect(find.text('排课'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('更多'), findsOneWidget);
+
+    // Settle pending timers from visibility_detector (anim_svg dependency).
+    await tester.pumpAndSettle();
   });
 
   testWidgets('keeps catalog search text after debounced refresh', (

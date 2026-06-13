@@ -26,9 +26,18 @@ class SettingsRepository {
     );
   }
 
-  Future<RuntimeState> getRuntimeState({CancelToken? cancelToken}) {
+  Future<RuntimeState> getRuntimeState({
+    Map<String, String>? extraHeaders,
+    CancelToken? cancelToken,
+  }) {
     return _client.get(
       '/api/settings/runtime-state',
+      queryParameters: {'_t': '${DateTime.now().millisecondsSinceEpoch}'},
+      extraHeaders: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        ...?extraHeaders,
+      },
       cancelToken: cancelToken,
       decode: RuntimeState.fromJson,
     );

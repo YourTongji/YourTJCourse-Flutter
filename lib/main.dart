@@ -10,40 +10,78 @@ import 'features/catalog/catalog_view.dart';
 import 'features/announcements/announcement_controller.dart';
 import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
-import 'features/maintenance/maintenance_provider.dart';
-import 'features/maintenance/maintenance_view.dart';
+import 'features/maintenance/maintenance_gate.dart';
 import 'features/profile/profile_view.dart';
+import 'services/log_writer.dart';
 import 'features/scheduler/scheduler_view.dart';
+import 'features/settings/app_logs_page.dart';
 import 'features/settings/settings_view.dart';
+import 'features/settings/theme_provider.dart';
+import 'features/settings/theme_settings_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'features/update/auto_update_gate.dart';
+import 'features/wallet/transaction_history_view.dart';
+import 'features/wallet/wallet_registration_view.dart';
+import 'features/wallet/wallet_view.dart';
 import 'domain/models/runtime_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(isOptional: true);
-  runApp(const ProviderScope(child: YourTJCourseApp()));
+  await LogWriter.init();
+  LogWriter.instance.write({
+    'timestamp': DateTime.now().toIso8601String(),
+    'level': 'info',
+    'type': 'lifecycle',
+    'event': 'app_start',
+    'message': '应用启动',
+  });
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const YourTJCourseApp(),
+    ),
+  );
 }
 
-class YourTJCourseApp extends StatelessWidget {
+/// Cache theme data to prevent full widget tree rebuild on theme switch.
+final _themeCache = <(int, int, int), ThemeData>{};
+
+class YourTJCourseApp extends ConsumerWidget {
   const YourTJCourseApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeState = ref.watch(themeProvider);
+
+    // Build a cache key from the inputs so matching seeds + variants
+    // return the same ThemeData object. This prevents MaterialApp from
+    // rebuilding the full widget tree when only themeMode changes.
+    final seed = themeState.useDynamicColor
+        ? LkcnColors.primary
+        : themeState.seedColor;
+    final variant = themeState.schemeVariant;
+
+    final lightKey = (seed.toARGB32(), Brightness.light.index, variant.index);
+    final darkKey = (seed.toARGB32(), Brightness.dark.index, variant.index);
+
     return MaterialApp.router(
       title: 'YourTJ Course',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      theme: _themeCache.putIfAbsent(lightKey, () => _buildTheme(Brightness.light, seed, variant)),
+      darkTheme: _themeCache.putIfAbsent(darkKey, () => _buildTheme(Brightness.dark, seed, variant)),
+      themeMode: themeState.mode,
       routerConfig: _router,
     );
   }
 }
 
-ThemeData _buildTheme(Brightness brightness) {
+ThemeData _buildTheme(Brightness brightness, Color seed, [DynamicSchemeVariant? variant]) {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: LkcnColors.primary,
+    seedColor: seed,
     brightness: brightness,
+    dynamicSchemeVariant: variant ?? DynamicSchemeVariant.tonalSpot,
   );
   return ThemeData(
     useMaterial3: true,
@@ -163,6 +201,31 @@ final _router = GoRouter(
         return CourseDetailView(courseId: courseId);
       },
     ),
+    GoRoute(
+      path: '/theme-settings',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const ThemeSettingsView(),
+    ),
+    GoRoute(
+      path: '/app-logs',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const AppLogsPage(),
+    ),
+    GoRoute(
+      path: '/wallet',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const WalletView(),
+      routes: [
+        GoRoute(
+          path: 'register',
+          builder: (context, state) => const WalletRegistrationView(),
+        ),
+        GoRoute(
+          path: 'history',
+          builder: (context, state) => const TransactionHistoryView(),
+        ),
+      ],
+    ),
   ],
 );
 
@@ -173,26 +236,28 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AnnouncementGate(
-      child: _MaintenanceGate(
-        child: AutoUpdateGate(
-          child: _SplashGate(
-          child: Scaffold(
-            body: navigationShell,
-            bottomNavigationBar: _AppNavigationBar(
-              active: navigationShell.currentIndex,
-              onChange: (index) {
-                navigationShell.goBranch(
-                  index,
-                  initialLocation: index == navigationShell.currentIndex,
-                );
-              },
+    return Consumer(builder: (context, ref, _) {
+      return _AnnouncementGate(
+        child: MaintenanceGate(
+          child: AutoUpdateGate(
+            child: _SplashGate(
+              child: Scaffold(
+                body: navigationShell,
+                bottomNavigationBar: _AppNavigationBar(
+                  active: navigationShell.currentIndex,
+                  onChange: (index) {
+                    navigationShell.goBranch(
+                      index,
+                      initialLocation: index == navigationShell.currentIndex,
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ),
-    );
+      );
+    });
   }
 }
 
@@ -473,27 +538,6 @@ class _AnnouncementGateState extends ConsumerState<_AnnouncementGate> {
           ],
         );
       },
-    );
-  }
-}
-
-/// Shows a full-screen maintenance overlay when the backend is in maintenance mode.
-///
-/// Watches [maintenanceStateProvider] and swaps the child widget for
-/// [MaintenanceView] when `maintenance.enabled` is true.
-class _MaintenanceGate extends ConsumerWidget {
-  const _MaintenanceGate({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final maintenance = ref.watch(maintenanceStateProvider);
-
-    return maintenance.when(
-      data: (state) => state.enabled ? const MaintenanceView() : child,
-      loading: () => child, // show app content while initial fetch runs
-      error: (_, _) => child, // fall through on fetch failure
     );
   }
 }
