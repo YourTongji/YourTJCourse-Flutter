@@ -12,6 +12,7 @@ import 'features/course_detail/course_by_code_view.dart';
 import 'features/course_detail/course_detail_view.dart';
 import 'features/maintenance/maintenance_gate.dart';
 import 'features/profile/profile_view.dart';
+import 'services/app_logger.dart';
 import 'services/log_writer.dart';
 import 'features/scheduler/scheduler_view.dart';
 import 'features/settings/app_logs_page.dart';
@@ -29,20 +30,45 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(isOptional: true);
   await LogWriter.init();
-  LogWriter.instance.write({
-    'timestamp': DateTime.now().toIso8601String(),
-    'level': 'info',
-    'type': 'lifecycle',
-    'event': 'app_start',
-    'message': '应用启动',
+
+  // ── Global error handlers ─────────────────────────────────────
+  // Capture Flutter framework errors and unhandled async exceptions,
+  // logging them with full stack traces to the app log system.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    AppLogger.error(
+      details.exceptionAsString(),
+      error: details.exception,
+      stackTrace: details.stack,
+      tag: 'FlutterError',
+    );
+  };
+
+  runZonedGuarded(() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    LogWriter.instance.write({
+      'timestamp': DateTime.now().toIso8601String(),
+      'level': 'info',
+      'type': 'lifecycle',
+      'event': 'app_start',
+      'message': '应用启动',
+    });
+
+    runApp(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: const YourTJCourseApp(),
+      ),
+    );
+  }, (Object error, StackTrace stack) {
+    AppLogger.error(
+      '未捕获的异步异常',
+      error: error,
+      stackTrace: stack,
+      tag: 'Uncaught',
+    );
   });
-  final prefs = await SharedPreferences.getInstance();
-  runApp(
-    ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const YourTJCourseApp(),
-    ),
-  );
 }
 
 /// Cache theme data to prevent full widget tree rebuild on theme switch.
